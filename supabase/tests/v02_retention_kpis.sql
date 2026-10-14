@@ -30,7 +30,8 @@ RESET ROLE;
 -- A real client connection must NOT be labeled as discovery via that client.
 INSERT INTO auth.users(id) VALUES('55555555-5555-4555-8555-555555555555');
 SET LOCAL ROLE service_role;
-SELECT public.fj_set_privacy('55555555-5555-4555-8555-555555555555',true,false,'2026-10-v2');
+SELECT public.fj_set_privacy('55555555-5555-4555-8555-555555555555',true,false,'2026-10-v2',now());
+DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM public.funnel_events WHERE user_id='55555555-5555-4555-8555-555555555555' AND event_name='registration') THEN RAISE EXCEPTION 'precondition: registration event missing';END IF;END; $$;
 SELECT public.fj_record_funnel('55555555-5555-4555-8555-555555555555','mcp_connected','first-client','chatgpt','registered_client');
 DO $$ BEGIN
  IF EXISTS(SELECT 1 FROM public.funnel_events WHERE user_id='55555555-5555-4555-8555-555555555555' AND event_name='registration' AND source_channel<>'unknown') THEN RAISE EXCEPTION 'client confused with acquisition';END IF;

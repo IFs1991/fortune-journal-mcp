@@ -30,5 +30,12 @@
       "slug": "fj_v02_05_retention_and_security",
       "sha256": "282061be761cf8f8c53180a68559bc1ab2c4c3fb9fd6e6f8d2aff90327947f95"
     }
+  ],
+  "forwardFixes": [
+    {
+      "file": "20261014162204_fj_v02_06_privacy_registration_forward_fix.sql",
+      "sha256": "d75a7d53af932c6861ee34231adbb30029e2ae778176c7a2f187102a54589e69",
+      "fixes": "03_transactional_commands.sql fj_set_privacy read auth.users as service_role"
+    }
   ]
 }

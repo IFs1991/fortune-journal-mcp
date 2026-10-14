@@ -26,6 +26,10 @@ for(const item of manifest.templates){
  }else if(digest(readFileSync(path.join(folder,files[0])))!==item.sha256)throw new Error(`Existing migration differs: ${files[0]}. Never overwrite it; create a forward fix.`);
  mapping.push({template:item.file,migration:files[0],sha256:item.sha256});
 }
+// Forward fixes are CLI-generated migrations reviewed after the templates; they must never change once recorded.
+for(const fix of manifest.forwardFixes??[]){const file=path.join(folder,fix.file);if(!existsSync(file))throw new Error(`Forward fix missing: ${fix.file}`);if(digest(readFileSync(file))!==fix.sha256)throw new Error(`Forward fix changed: ${fix.file}. Create a new migration instead.`);}
+const known=new Set([manifest.initial.file,...mapping.map(m=>m.migration),...(manifest.forwardFixes??[]).map(f=>f.file)]);
+const unknown=readdirSync(folder).filter(n=>n.endsWith('.sql')&&!known.has(n));if(unknown.length)throw new Error(`Unreviewed migration(s) not in manifest: ${unknown.join(', ')}`);
 const times=readdirSync(folder).filter(n=>/^\d{14}_.*\.sql$/.test(n)).map(n=>n.slice(0,14));if(new Set(times).size!==times.length)throw new Error('Duplicate migration timestamp');
 if(!check)writeFileSync(path.join(root,'supabase/template-lock.json'),JSON.stringify(mapping,null,2)+'\n');
 console.log(`Prepared ${mapping.length} additive migrations via official CLI. No remote database was changed.`);

@@ -14,6 +14,7 @@ assert(hash('supabase/migrations/'+mf.initial.file)===mf.initial.sha256,'Histori
 assert(mf.templates.length===5,'Expected 5 additive SQL stages');
 let sql=read('supabase/migrations/'+mf.initial.file);
 for(const t of mf.templates){const f='supabase/migration-templates/'+t.file;assert(hash(f)===t.sha256,'Unreviewed template '+t.file);const s=read(f);assert(/\bBEGIN;/.test(s)&&s.trim().endsWith('COMMIT;'),'Migration transaction missing');sql+='\n'+s;}
+for(const f of mf.forwardFixes??[]){const p='supabase/migrations/'+f.file;assert(hash(p)===f.sha256,'Forward fix changed '+f.file);const s=read(p);assert(/\bBEGIN;/.test(s)&&s.trim().endsWith('COMMIT;'),'Migration transaction missing');sql+='\n'+s;}
 const lower=sql.toLowerCase();
 const tables=['user_access','subscriptions','usage_counters','billing_events','fortune_posts','post_metric_snapshots','account_metric_snapshots','automation_runs','user_readings','funnel_events','reading_feedback'];
 for(const t of tables){assert(lower.includes(`create table public.${t} (`),'Missing table '+t);assert(lower.includes(`alter table public.${t} enable row level security`),'Missing RLS '+t);}
@@ -38,4 +39,4 @@ for(const f of ['AGENTS.md','Agent.md','CLAUDE.md','docs/UPGRADE.md','docs/DEFIN
 const fixtures=readdirSync('supabase/migrations').filter(x=>x.endsWith('.sql'));
 assert(fixtures.includes(mf.initial.file),'Initial migration absent');
 assert(!existsSync('.env.local'),'Do not package real env files');
-console.log(`PASS: static contracts (11 tables, 5 additive SQL stages, 7 MCP tools). This does NOT execute SQL, typecheck dependencies, build, or exercise real providers.`);
+console.log(`PASS: static contracts (11 tables, 5 additive SQL stages + ${(mf.forwardFixes??[]).length} forward fix(es), 7 MCP tools). This does NOT execute SQL, typecheck dependencies, build, or exercise real providers.`);

@@ -11,7 +11,9 @@ export async function POST(request:Request){
  let body:string;try{body=await readBoundedText(request,8192);}catch{return new Response('Too large',{status:413});}
  const form=new URLSearchParams(body),analytics=form.get('analytics')==='yes',interests=form.get('interests')==='yes';
  if(analytics&&process.env.PRODUCT_ANALYTICS_ENABLED!=='true')return new Response('Optional analytics is disabled',{status:503});
- const db=adminSupabase();const {error}=await db.rpc('fj_set_privacy',{p_user_id:user.id,p_analytics:analytics,p_interests:analytics&&interests,p_version:PRIVACY_VERSION});
+ const db=adminSupabase();const {error}=await db.rpc('fj_set_privacy',{p_user_id:user.id,p_analytics:analytics,p_interests:analytics&&interests,p_version:PRIVACY_VERSION,
+  // Registration time comes from the verified Supabase Auth user; service_role cannot read auth.users (migration 06).
+  p_registered_at:user.created_at??null});
  if(error)return new Response('Could not update preferences',{status:503});
  if(analytics){const ref=readReferral(process.env.ATTRIBUTION_HMAC_KEY,form.get('ref')??undefined);
   const source=form.get('source');
