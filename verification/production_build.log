@@ -1,5 +1,53 @@
+$ rm -rf .next && env -u APP_ORIGIN -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_TELEMETRY_DISABLED=1 npm run build
+# started 2026-10-14T16:54:51Z
 
 > fortune-journal-mcp@0.2.0 build
 > next build
 
-sh: 1: next: not found
+   ▲ Next.js 15.5.27
+
+   Creating an optimized production build ...
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (113kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (268kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled successfully in 15.4s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/13) ...
+   Generating static pages (3/13) 
+   Generating static pages (6/13) 
+   Generating static pages (9/13) 
+ ✓ Generating static pages (13/13)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                             Size  First Load JS
+┌ ○ /                                                  159 B         103 kB
+├ ○ /_not-found                                        991 B         104 kB
+├ ƒ /.well-known/oauth-protected-resource              159 B         103 kB
+├ ƒ /.well-known/oauth-protected-resource/[...path]    159 B         103 kB
+├ ƒ /api/account/delete                                159 B         103 kB
+├ ƒ /api/account/export                                159 B         103 kB
+├ ƒ /api/account/preferences                           159 B         103 kB
+├ ƒ /api/billing/webhook                               159 B         103 kB
+├ ƒ /api/cron/maintenance                              159 B         103 kB
+├ ƒ /api/health                                        159 B         103 kB
+├ ƒ /api/mcp                                           159 B         103 kB
+├ ƒ /api/oauth/decision                                159 B         103 kB
+├ ƒ /api/oauth/revoke                                  159 B         103 kB
+├ ƒ /api/ops                                           159 B         103 kB
+├ ƒ /auth/callback                                     159 B         103 kB
+├ ƒ /auth/signout                                      159 B         103 kB
+├ ƒ /login                                           70.1 kB         173 kB
+└ ƒ /oauth/consent                                     159 B         103 kB
++ First Load JS shared by all                         103 kB
+  ├ chunks/255-ce8c7c75002f810b.js                   46.5 kB
+  ├ chunks/4bd1b696-c023c6e3521b1417.js              54.2 kB
+  └ other shared chunks (total)                      1.97 kB
+
+
+ƒ Middleware                                         94.6 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+# exit 0

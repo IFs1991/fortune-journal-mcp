@@ -1,212 +1,251 @@
+$ npm test
+# started 2026-10-14T16:54:39Z
 
 > fortune-journal-mcp@0.2.0 test
 > node --experimental-strip-types --test tests/*.test.mjs
 
 TAP version 13
-# (node:2214) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
-# (Use `node --trace-warnings ...` to show where the warning was created)
 # Subtest: missing metrics remain null, a reported zero remains zero
 ok 1 - missing metrics remain null, a reported zero remains zero
   ---
-  duration_ms: 1.261409
+  duration_ms: 2.8289
   type: 'test'
   ...
 # Subtest: zero views, unknown components and incompatible periods do not produce a fake rate
 ok 2 - zero views, unknown components and incompatible periods do not produce a fake rate
   ---
-  duration_ms: 0.173517
+  duration_ms: 0.5767
   type: 'test'
   ...
 # Subtest: specified engagement formula excludes shares and is not a unique-user rate
 ok 3 - specified engagement formula excludes shares and is not a unique-user rate
   ---
-  duration_ms: 0.223972
+  duration_ms: 0.31
   type: 'test'
   ...
 # Subtest: counters reject negatives, strings, unsafe integers, and NaN
 ok 4 - counters reject negatives, strings, unsafe integers, and NaN
   ---
-  duration_ms: 0.178825
+  duration_ms: 0.2638
   type: 'test'
   ...
 # Subtest: followers are stocks; daily and range metrics preserve separate boundaries
 ok 5 - followers are stocks; daily and range metrics preserve separate boundaries
   ---
-  duration_ms: 0.674469
+  duration_ms: 4.4081
   type: 'test'
   ...
 # Subtest: historical counters cannot be labeled as due 24h/72h snapshots
 ok 6 - historical counters cannot be labeled as due 24h/72h snapshots
   ---
-  duration_ms: 0.854355
+  duration_ms: 2.2497
   type: 'test'
   ...
 # Subtest: import preserves original timestamp; skips missing text and replies
 ok 7 - import preserves original timestamp; skips missing text and replies
   ---
-  duration_ms: 0.328076
+  duration_ms: 0.9884
   type: 'test'
   ...
 # Subtest: D7 is a bounded matured window, not any return in the first week
 ok 8 - D7 is a bounded matured window, not any return in the first week
   ---
-  duration_ms: 0.197021
+  duration_ms: 0.6178
   type: 'test'
   ...
 # Subtest: empty cohorts are unavailable, not zero percent
 ok 9 - empty cohorts are unavailable, not zero percent
   ---
-  duration_ms: 0.535964
+  duration_ms: 1.3097
   type: 'test'
   ...
 # Subtest: cash preserves integer minor units, signs, currency and exponent
 ok 10 - cash preserves integer minor units, signs, currency and exponent
   ---
-  duration_ms: 0.664554
+  duration_ms: 1.4348
   type: 'test'
   ...
-# (node:2215) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
-# (Use `node --trace-warnings ...` to show where the warning was created)
 # Subtest: normalized billing preserves amounts; rejects unsafe numbers and missing currency scale
 ok 11 - normalized billing preserves amounts; rejects unsafe numbers and missing currency scale
   ---
-  duration_ms: 1.334767
+  duration_ms: 2.8498
   type: 'test'
   ...
 # Subtest: non-financial notifications do not count as cash
 ok 12 - non-financial notifications do not count as cash
   ---
-  duration_ms: 0.199886
+  duration_ms: 0.4415
   type: 'test'
   ...
 # Subtest: only verified current subscription snapshots grant Premium
 ok 13 - only verified current subscription snapshots grant Premium
   ---
-  duration_ms: 0.282609
+  duration_ms: 0.6168
   type: 'test'
   ...
-# (node:2216) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
-# (Use `node --trace-warnings ...` to show where the warning was created)
 # Subtest: ISO date parser refuses bad calendar dates and supports leap day
 ok 14 - ISO date parser refuses bad calendar dates and supports leap day
   ---
-  duration_ms: 1.371672
+  duration_ms: 3.9577
   type: 'test'
   ...
 # Subtest: number reduction and time-dependent personal cycle deterministic
 ok 15 - number reduction and time-dependent personal cycle deterministic
   ---
-  duration_ms: 0.986301
+  duration_ms: 0.8504
   type: 'test'
   ...
 # Subtest: tarot uses no duplicates and is reproducible for the same draw id
 ok 16 - tarot uses no duplicates and is reproducible for the same draw id
   ---
-  duration_ms: 1.057537
+  duration_ms: 2.8398
   type: 'test'
   ...
 # Subtest: quota, trial, expiry and suspension never trust client plans
 ok 17 - quota, trial, expiry and suspension never trust client plans
   ---
-  duration_ms: 0.478479
+  duration_ms: 3.072
   type: 'test'
   ...
 # Subtest: spreadsheet formulas are escaped
 ok 18 - spreadsheet formulas are escaped
   ---
-  duration_ms: 0.253706
+  duration_ms: 0.627
   type: 'test'
   ...
-# (node:2247) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
-# (Use `node --trace-warnings ...` to show where the warning was created)
-# Subtest: HMAC fingerprints bind the account, operation, feature and exact normalized input
-ok 19 - HMAC fingerprints bind the account, operation, feature and exact normalized input
+# Subtest: fortune records keep creation time, target period, method and result version apart from life records
+ok 19 - fortune records keep creation time, target period, method and result version apart from life records
   ---
-  duration_ms: 1.420674
+  duration_ms: 1.7833
+  type: 'test'
+  ...
+# Subtest: schema changes are additive: v1.1 column order is preserved for existing workbooks
+ok 20 - schema changes are additive: v1.1 column order is preserved for existing workbooks
+  ---
+  duration_ms: 2.2617
+  type: 'test'
+  ...
+# Subtest: write rules cover formula injection, duplicates, refusal and no false save claims
+ok 21 - write rules cover formula injection, duplicates, refusal and no false save claims
+  ---
+  duration_ms: 0.526
+  type: 'test'
+  ...
+# Subtest: formula escaping also covers tab/CR prefixes and leaves plain text alone
+ok 22 - formula escaping also covers tab/CR prefixes and leaves plain text alone
+  ---
+  duration_ms: 0.7373
+  type: 'test'
+  ...
+# Subtest: accepts a Supabase OAuth access token bound to the verified user and an OAuth client
+ok 23 - accepts a Supabase OAuth access token bound to the verified user and an OAuth client
+  ---
+  duration_ms: 4.1894
+  type: 'test'
+  ...
+# Subtest: rejects browser-session tokens without client_id, foreign issuers, wrong subject, role, audience, expiry
+ok 24 - rejects browser-session tokens without client_id, foreign issuers, wrong subject, role, audience, expiry
+  ---
+  duration_ms: 0.771
+  type: 'test'
+  ...
+# Subtest: trailing slash in configured issuer does not loosen the check
+ok 25 - trailing slash in configured issuer does not loosen the check
+  ---
+  duration_ms: 0.6086
+  type: 'test'
+  ...
+# Subtest: JWT payload decoding is strict about shape
+ok 26 - JWT payload decoding is strict about shape
+  ---
+  duration_ms: 0.9844
+  type: 'test'
+  ...
+# Subtest: HMAC fingerprints bind the account, operation, feature and exact normalized input
+ok 27 - HMAC fingerprints bind the account, operation, feature and exact normalized input
+  ---
+  duration_ms: 4.4911
   type: 'test'
   ...
 # Subtest: ops signature binds body, path, method and timestamp
-ok 20 - ops signature binds body, path, method and timestamp
+ok 28 - ops signature binds body, path, method and timestamp
   ---
-  duration_ms: 0.424439
+  duration_ms: 1.9153
   type: 'test'
   ...
 # Subtest: missing and placeholder keys fail closed
-ok 21 - missing and placeholder keys fail closed
+ok 29 - missing and placeholder keys fail closed
   ---
-  duration_ms: 0.264372
+  duration_ms: 0.953
   type: 'test'
   ...
 # Subtest: referrals contain only a public post ID and expiration, reject tampering and expiry
-ok 22 - referrals contain only a public post ID and expiration, reject tampering and expiry
+ok 30 - referrals contain only a public post ID and expiration, reject tampering and expiry
   ---
-  duration_ms: 1.000251
+  duration_ms: 3.1787
   type: 'test'
   ...
 # Subtest: bounded streaming body limit does not trust Content-Length
-ok 23 - bounded streaming body limit does not trust Content-Length
+ok 31 - bounded streaming body limit does not trust Content-Length
   ---
-  duration_ms: 16.800935
+  duration_ms: 43.823
   type: 'test'
   ...
-# (node:2254) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
-# (Use `node --trace-warnings ...` to show where the warning was created)
 # Subtest: insights credentials are headers, not URL query strings
-ok 24 - insights credentials are headers, not URL query strings
+ok 32 - insights credentials are headers, not URL query strings
   ---
-  duration_ms: 21.61736
+  duration_ms: 63.7167
   type: 'test'
   ...
 # Subtest: followers fetch omits time filters and period metrics explicitly include them
-ok 25 - followers fetch omits time filters and period metrics explicitly include them
+ok 33 - followers fetch omits time filters and period metrics explicitly include them
   ---
-  duration_ms: 0.896658
+  duration_ms: 3.6508
   type: 'test'
   ...
 # Subtest: remote publish is never automatically retried on transport uncertainty
-ok 26 - remote publish is never automatically retried on transport uncertainty
+ok 34 - remote publish is never automatically retried on transport uncertainty
   ---
-  duration_ms: 0.488905
+  duration_ms: 2.1324
   type: 'test'
   ...
 # Subtest: returned next URL cannot redirect the client to another host
-ok 27 - returned next URL cannot redirect the client to another host
+ok 35 - returned next URL cannot redirect the client to another host
   ---
-  duration_ms: 0.483246
+  duration_ms: 2.1463
   type: 'test'
   ...
 # Subtest: 429 and permissions are distinct safe error codes
-ok 28 - 429 and permissions are distinct safe error codes
+ok 36 - 429 and permissions are distinct safe error codes
   ---
-  duration_ms: 0.685095
+  duration_ms: 2.3583
   type: 'test'
   ...
 # Subtest: malformed IDs and overlong text cannot become remote paths or posts
-ok 29 - malformed IDs and overlong text cannot become remote paths or posts
+ok 37 - malformed IDs and overlong text cannot become remote paths or posts
   ---
-  duration_ms: 0.219415
+  duration_ms: 0.4959
   type: 'test'
   ...
-# (node:2264) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
-# (Use `node --trace-warnings ...` to show where the warning was created)
 # Subtest: reject open redirects and preserve safe consent route
-ok 30 - reject open redirects and preserve safe consent route
+ok 38 - reject open redirects and preserve safe consent route
   ---
-  duration_ms: 0.7765
+  duration_ms: 3.4817
   type: 'test'
   ...
 # Subtest: mutating browser endpoint requires matching Origin header
-ok 31 - mutating browser endpoint requires matching Origin header
+ok 39 - mutating browser endpoint requires matching Origin header
   ---
-  duration_ms: 19.973605
+  duration_ms: 48.5673
   type: 'test'
   ...
-1..31
-# tests 31
+1..39
+# tests 39
 # suites 0
-# pass 31
+# pass 39
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 282.788573
+# duration_ms 533.0296
+# exit 0

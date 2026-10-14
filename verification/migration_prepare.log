@@ -1,15 +1,43 @@
+$ npm run db:check-prepared && sha256sum supabase/migrations/*.sql && cat supabase/template-lock.json
+# started 2026-10-14T16:55:43Z
 
-> fortune-journal-mcp@0.2.0 db:prepare
-> node scripts/prepare-migrations.mjs
+> fortune-journal-mcp@0.2.0 db:check-prepared
+> node scripts/prepare-migrations.mjs --check
 
-file:///mnt/data/fortune-journal-mcp-v0.2/scripts/prepare-migrations.mjs:8
-if(!check){for(const args of [['--version'],['migration','new','--help']]){const result=spawnSync(cli,args,{cwd:root,encoding:'utf8'});if(result.status!==0)throw new Error('Supabase CLI unavailable. Install the official CLI, inspect --help, then rerun. No SQL has been applied.');}}
-                                                                                                                                                                  ^
-
-Error: Supabase CLI unavailable. Install the official CLI, inspect --help, then rerun. No SQL has been applied.
-    at file:///mnt/data/fortune-journal-mcp-v0.2/scripts/prepare-migrations.mjs:8:163
-    at ModuleJob.run (node:internal/modules/esm/module_job:274:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:644:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
-
-Node.js v22.16.0
+Prepared 5 additive migrations via official CLI. No remote database was changed.
+6e2155b09d924ef10827de1d300341f840e1c3006962d5e4ceb8a85d8578b5ec *supabase/migrations/20261014000100_initial_schema.sql
+84bf71bec495803fbd70d379f27d80484138b45f4171709787a099fac3f2aeaf *supabase/migrations/20261014160916_fj_v02_01_growth_operations.sql
+34af8f6d0f165ea1631bccca441954e61ebac396f738125876bfb3227f486f19 *supabase/migrations/20261014160919_fj_v02_02_product_telemetry_and_billing.sql
+79e8fdce177b37811cc6c354ed1db39b315eeb8343fdf4067eb6858ea621608a *supabase/migrations/20261014160922_fj_v02_03_transactional_commands.sql
+bceabcf3d0c231f0cd452ca3c498b555a64afed111b3d6afae78049083226490 *supabase/migrations/20261014160925_fj_v02_04_billing_and_kpis.sql
+282061be761cf8f8c53180a68559bc1ab2c4c3fb9fd6e6f8d2aff90327947f95 *supabase/migrations/20261014160928_fj_v02_05_retention_and_security.sql
+d75a7d53af932c6861ee34231adbb30029e2ae778176c7a2f187102a54589e69 *supabase/migrations/20261014162204_fj_v02_06_privacy_registration_forward_fix.sql
+d01b14f052a4063dd6f5d51858bbc9d88af2efa146160355dab9227b8810dd12 *supabase/migrations/20261014164844_fj_v02_07_fk_covering_indexes.sql
+[
+  {
+    "template": "01_growth_operations.sql",
+    "migration": "20261014160916_fj_v02_01_growth_operations.sql",
+    "sha256": "84bf71bec495803fbd70d379f27d80484138b45f4171709787a099fac3f2aeaf"
+  },
+  {
+    "template": "02_product_telemetry_and_billing.sql",
+    "migration": "20261014160919_fj_v02_02_product_telemetry_and_billing.sql",
+    "sha256": "34af8f6d0f165ea1631bccca441954e61ebac396f738125876bfb3227f486f19"
+  },
+  {
+    "template": "03_transactional_commands.sql",
+    "migration": "20261014160922_fj_v02_03_transactional_commands.sql",
+    "sha256": "79e8fdce177b37811cc6c354ed1db39b315eeb8343fdf4067eb6858ea621608a"
+  },
+  {
+    "template": "04_billing_and_kpis.sql",
+    "migration": "20261014160925_fj_v02_04_billing_and_kpis.sql",
+    "sha256": "bceabcf3d0c231f0cd452ca3c498b555a64afed111b3d6afae78049083226490"
+  },
+  {
+    "template": "05_retention_and_security.sql",
+    "migration": "20261014160928_fj_v02_05_retention_and_security.sql",
+    "sha256": "282061be761cf8f8c53180a68559bc1ab2c4c3fb9fd6e6f8d2aff90327947f95"
+  }
+]
+# exit 0

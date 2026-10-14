@@ -173,6 +173,17 @@ try{
   ok(t1.cards?.length===3&&JSON.stringify(t1.cards)===JSON.stringify(t2.cards)&&t2.replayed===true,'tarot draw not reproducible/idempotent');
  });
 
+ await step('Tarot retry on a later day replays the original draw instead of charging again',async()=>{
+  const drawId=randomUUID();const first=await tool(accessA.access_token,'draw_tarot',{count:1,drawId});ok(first.replayed===false,'first draw');
+  const yesterday=new Date(Date.now()-864e5).toISOString().slice(0,10);
+  const {error}=await admin.from('user_readings').update({target_date:yesterday}).eq('id',first.readingId);ok(!error,'fixture update');
+  const {data:before}=await admin.from('usage_counters').select('used_count').eq('user_id',A.id);
+  const again=await tool(accessA.access_token,'draw_tarot',{count:1,drawId});
+  const {data:after}=await admin.from('usage_counters').select('used_count').eq('user_id',A.id);
+  ok(again.replayed===true&&JSON.stringify(again.cards)===JSON.stringify(first.cards),'cross-day retry not replayed');
+  ok(before.reduce((n,c)=>n+c.used_count,0)===after.reduce((n,c)=>n+c.used_count,0),'cross-day retry consumed quota');
+ });
+
  await step('Free tier after trial: tarot denied, numerology 3/ISO-week then USAGE_LIMIT_REACHED',async()=>{
   const {error}=await admin.from('user_access').update({trial_started_at:new Date(Date.now()-20*864e5).toISOString(),trial_ends_at:new Date(Date.now()-6*864e5).toISOString()}).eq('user_id',A.id);ok(!error,'fixture update');
   await admin.from('usage_counters').delete().eq('user_id',A.id);
@@ -232,6 +243,17 @@ try{
   ok((await a.rpc('fj_record_calculation',{p_user_id:A.id,p_request_id:randomUUID(),p_fingerprint:'a'.repeat(64),p_feature:'calculate_numerology',p_algorithm:'x',p_target_date:'2026-10-15'})).error,'A called quota RPC');
   ok((await a.rpc('fj_set_privacy',{p_user_id:B.id,p_analytics:true,p_interests:true,p_version:'2026-10-v2'})).error,'A changed B consent');
   ok((await a.from('billing_events').select('*').limit(1)).error,'A read billing events');
+ });
+
+ await step('Export: own data only, paged, no fingerprint; requires a session',async()=>{
+  ok((await fetch(`${APP}/api/account/export?resource=readings`)).status===401,'export without session');
+  const cookieA=await cookieHeader(A.session);
+  ok((await fetch(`${APP}/api/account/export?resource=secrets`,{headers:{cookie:cookieA}})).status===400,'unknown resource accepted');
+  const r=await fetch(`${APP}/api/account/export?resource=readings`,{headers:{cookie:cookieA}});const body=await r.json();
+  ok(r.status===200&&r.headers.get('cache-control')==='no-store'&&body.rows.length>0,`export ${r.status}`);
+  ok(!JSON.stringify(body).includes('request_fingerprint')&&!JSON.stringify(body).includes('1991-09-12'),'export leaks fingerprint or birth date');
+  const {data:all}=await admin.from('user_readings').select('id').eq('user_id',A.id);
+  ok(body.rows.length===Math.min(all.length,100)&&body.rows.every(x=>all.some(y=>y.id===x.id)),'export rows are not exactly A\'s rows');
  });
 
  await step('OAuth: refresh token rotates and yields a working access token',async()=>{

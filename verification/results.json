@@ -1,93 +1,23 @@
 {
-  "version": "0.2.0",
-  "date_utc": "2026-10-14T01:38:03.118449+00:00",
-  "environment": {
-    "node": "v22.16.0",
-    "npm": "10.9.2"
-  },
-  "checks": [
-    {
-      "check": "unit",
-      "command": "npm test",
-      "status": "passed",
-      "exit_code": 0,
-      "log": "unit.log"
-    },
-    {
-      "check": "static",
-      "command": "npm run check:static",
-      "status": "passed",
-      "exit_code": 0,
-      "log": "static.log"
-    },
-    {
-      "check": "syntax",
-      "command": "npm run check:syntax",
-      "status": "passed",
-      "exit_code": 0,
-      "log": "syntax.log"
-    },
-    {
-      "check": "pure_types",
-      "command": "npm run check:pure-types",
-      "status": "passed",
-      "exit_code": 0,
-      "log": "pure_types.log"
-    },
-    {
-      "check": "shell",
-      "command": "bash -n scripts/test-db.sh",
-      "status": "passed",
-      "exit_code": 0,
-      "log": "shell.log"
-    },
-    {
-      "check": "db",
-      "command": "npm run test:db",
-      "status": "blocked",
-      "exit_code": 2,
-      "log": "db.log"
-    },
-    {
-      "check": "migration_prepare",
-      "command": "npm run db:prepare",
-      "status": "blocked",
-      "exit_code": 1,
-      "log": "migration_prepare.log"
-    },
-    {
-      "check": "full_types",
-      "command": "npm run typecheck",
-      "status": "blocked",
-      "exit_code": 2,
-      "log": "full_types.log"
-    },
-    {
-      "check": "production_build",
-      "command": "npm run build",
-      "status": "blocked",
-      "exit_code": 127,
-      "log": "production_build.log"
-    },
-    {
-      "check": "historical_migration_integrity",
-      "status": "passed",
-      "sha256": "6e2155b09d924ef10827de1d300341f840e1c3006962d5e4ceb8a85d8578b5ec"
-    },
-    {
-      "check": "json_parse",
-      "status": "passed",
-      "files": 10
-    }
-  ],
-  "not_executed": [
-    "real Supabase/Auth/RLS tests",
-    "real Meta read or publish",
-    "real Google connector writes",
-    "Vercel deployment",
-    "payment provider verification",
-    "npm registry package/peer resolution",
-    "real ChatGPT/Claude MCP OAuth E2E"
-  ],
-  "final_source_checked_at_utc": "2026-10-14T01:41:16.282111+00:00"
+ "generatedAt":"2026-10-14T16:58:00Z",
+ "commit":"053b833",
+ "environment":{"os":"MINGW64_NT-10.0-26340 (Windows 11, Git Bash)","node":"v22.22.2","npm":"10.9.7","supabaseCli":"2.120.0","docker":"29.8.2","psql":"psql (PostgreSQL) 17.11"},
+ "results":[
+  {"check":"npm ci (fresh clone)","command":"cat 'C:/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/9a355fc9-2bcb-43c4-b426-39441b23783b/scratchpad/clean-ci.log'","exitCode":0,"startedAt":"2026-10-14T16:54:39Z","log":"npm_ci_clean_clone.log"},
+  {"check":"unit tests","command":"npm test","exitCode":0,"startedAt":"2026-10-14T16:54:39Z","log":"unit.log"},
+  {"check":"static contracts","command":"npm run check:static","exitCode":0,"startedAt":"2026-10-14T16:54:41Z","log":"static.log"},
+  {"check":"syntax-only","command":"npm run check:syntax","exitCode":0,"startedAt":"2026-10-14T16:54:42Z","log":"syntax.log"},
+  {"check":"pure-domain types","command":"npm run check:pure-types","exitCode":1,"startedAt":"2026-10-14T16:54:45Z","log":"pure_types.log"},
+  {"check":"full typecheck","command":"npm run typecheck","exitCode":0,"startedAt":"2026-10-14T16:54:46Z","log":"typecheck.log"},
+  {"check":"production build","command":"rm -rf .next && env -u APP_ORIGIN -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_TELEMETRY_DISABLED=1 npm run build","exitCode":0,"startedAt":"2026-10-14T16:54:51Z","log":"production_build.log"},
+  {"check":"npm audit","command":"npm audit --audit-level=low","exitCode":0,"startedAt":"2026-10-14T16:55:37Z","log":"audit.log"},
+  {"check":"shell syntax","command":"bash -n scripts/test-db.sh && bash -n scripts/test-supabase-local.sh && echo ok","exitCode":0,"startedAt":"2026-10-14T16:55:42Z","log":"shell_syntax.log"},
+  {"check":"migration integrity","command":"npm run db:check-prepared && sha256sum supabase/migrations/*.sql && cat supabase/template-lock.json","exitCode":0,"startedAt":"2026-10-14T16:55:43Z","log":"migration_prepare.log"},
+  {"check":"disposable PG fresh+upgrade","command":"bash scripts/test-db.sh","exitCode":0,"startedAt":"2026-10-14T16:55:44Z","log":"db.log"},
+  {"check":"local Supabase SQL suites","command":"bash scripts/test-supabase-local.sh","exitCode":0,"startedAt":"2026-10-14T16:56:22Z","log":"supabase_local_sql.log"},
+  {"check":"supabase db lint (local)","command":"supabase db lint --db-url postgresql://postgres:postgres@127.0.0.1:55422/postgres --level warning </dev/null","exitCode":0,"startedAt":"2026-10-14T16:56:28Z","log":"supabase_lint_local.log"},
+  {"check":"supabase db advisors (local)","command":"supabase db advisors --db-url postgresql://postgres:postgres@127.0.0.1:55422/postgres --type all --level info </dev/null","exitCode":0,"startedAt":"2026-10-14T16:56:30Z","log":"supabase_advisors_local.log"},
+  {"check":"E2E local (analytics+ops off)","command":"set -a; . 'C:/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/9a355fc9-2bcb-43c4-b426-39441b23783b/scratchpad/e2e.env'; set +a; PRODUCT_ANALYTICS_ENABLED=false OPERATIONS_ENABLED=false node scripts/e2e-local.mjs --out verification/e2e_local.json","exitCode":0,"startedAt":"2026-10-14T16:57:25Z","log":"e2e_local.log"},
+  {"check":"E2E local (analytics+ops on)","command":"set -a; . 'C:/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/9a355fc9-2bcb-43c4-b426-39441b23783b/scratchpad/e2e.env'; set +a; PRODUCT_ANALYTICS_ENABLED=true OPERATIONS_ENABLED=true node scripts/e2e-local.mjs --out verification/e2e_local_analytics_ops.json","exitCode":0,"startedAt":"2026-10-14T16:57:44Z","log":"e2e_local_analytics_ops.log"}
+ ]
 }

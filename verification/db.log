@@ -1,5 +1,542 @@
+$ bash scripts/test-db.sh
+# started 2026-10-14T16:55:44Z
+DO
+CREATE SCHEMA
+CREATE TABLE
+CREATE FUNCTION
+GRANT
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+GRANT
+GRANT
+CREATE POLICY
+CREATE POLICY
+CREATE POLICY
+CREATE FUNCTION
+REVOKE
+GRANT
+COMMENT
+COMMENT
+COMMENT
+BEGIN
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+COMMENT
+COMMENT
+COMMIT
+BEGIN
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+REVOKE
+GRANT
+GRANT
+GRANT
+CREATE POLICY
+CREATE POLICY
+ALTER TABLE
+ALTER TABLE
+CREATE INDEX
+CREATE INDEX
+ALTER TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMIT
+BEGIN
+ALTER TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+COMMIT
+BEGIN
+CREATE FUNCTION
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+REVOKE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+COMMIT
+BEGIN
+CREATE FUNCTION
+REVOKE
+GRANT
+REVOKE
+COMMIT
+BEGIN
+DROP FUNCTION
+CREATE FUNCTION
+REVOKE
+GRANT
+COMMIT
+BEGIN
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+COMMIT
+DO
+BEGIN
+INSERT 0 2
+SET
+                         fj_set_privacy                          
+-----------------------------------------------------------------
+ {"version": "2026-10-v2", "analytics": true, "interests": true}
+(1 row)
 
-> fortune-journal-mcp@0.2.0 test:db
-> bash scripts/test-db.sh
+                                                       fj_record_calculation                                                        
+------------------------------------------------------------------------------------------------------------------------------------
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "6db209d7-0326-4357-9018-ffe21a3f26ac", "remainingAtCompletion": 99}
+(1 row)
 
-BLOCKED: Docker/PostgreSQL runtime unavailable; SQL/RLS tests were not run.
+                                                       fj_record_calculation                                                        
+------------------------------------------------------------------------------------------------------------------------------------
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "18de160f-e671-4c34-bdba-c4158d78a889", "remainingAtCompletion": 99}
+(1 row)
+
+RESET
+DO
+SET
+              set_config              
+--------------------------------------
+ 11111111-1111-4111-8111-111111111111
+(1 row)
+
+DO
+SET
+DO
+RESET
+ROLLBACK
+BEGIN
+INSERT 0 2
+SET
+DO
+RESET
+ROLLBACK
+BEGIN
+INSERT 0 1
+SET
+INSERT 0 1
+DO
+RESET
+ROLLBACK
+BEGIN
+SET
+DO
+RESET
+INSERT 0 1
+SET
+                          fj_set_privacy                          
+------------------------------------------------------------------
+ {"version": "2026-10-v2", "analytics": true, "interests": false}
+(1 row)
+
+DO
+ fj_record_funnel 
+------------------
+ t
+(1 row)
+
+DO
+RESET
+ROLLBACK
+BEGIN
+INSERT 0 2
+SET
+                         fj_set_privacy                          
+-----------------------------------------------------------------
+ {"version": "2026-10-v2", "analytics": true, "interests": true}
+(1 row)
+
+                                                       fj_record_calculation                                                        
+------------------------------------------------------------------------------------------------------------------------------------
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "3e7c1fcf-b34d-490e-83c0-f7f9c28170b9", "remainingAtCompletion": 99}
+(1 row)
+
+                                                       fj_record_calculation                                                        
+------------------------------------------------------------------------------------------------------------------------------------
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "86fb9dd2-8418-4242-bfde-44290e13de11", "remainingAtCompletion": 99}
+(1 row)
+
+INSERT 0 1
+RESET
+SET
+              set_config              
+--------------------------------------
+ a0000000-0000-4000-8000-00000000000a
+(1 row)
+
+DO
+RESET
+SET
+ set_config 
+------------
+ 
+(1 row)
+
+DO
+RESET
+CREATE FUNCTION
+CREATE TRIGGER
+SET
+DO
+RESET
+DROP TRIGGER
+SET
+DO
+RESET
+SET
+DO
+RESET
+SET
+DO
+RESET
+SET
+DO
+RESET
+DELETE 1
+DO
+ROLLBACK
+BEGIN
+INSERT 0 3
+DO
+SET
+DO
+RESET
+ROLLBACK
+INSERT 0 2
+INSERT 0 1
+DO
+PASS: fresh PostgreSQL migration/RLS/transaction/concurrency tests (Auth stub only)
+DO
+CREATE SCHEMA
+CREATE TABLE
+CREATE FUNCTION
+GRANT
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+GRANT
+GRANT
+CREATE POLICY
+CREATE POLICY
+CREATE POLICY
+CREATE FUNCTION
+REVOKE
+GRANT
+COMMENT
+COMMENT
+COMMENT
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+BEGIN
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+COMMENT
+COMMENT
+COMMIT
+BEGIN
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+REVOKE
+GRANT
+GRANT
+GRANT
+CREATE POLICY
+CREATE POLICY
+ALTER TABLE
+ALTER TABLE
+CREATE INDEX
+CREATE INDEX
+ALTER TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMIT
+BEGIN
+ALTER TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+COMMIT
+BEGIN
+CREATE FUNCTION
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+REVOKE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+COMMIT
+BEGIN
+CREATE FUNCTION
+REVOKE
+GRANT
+REVOKE
+COMMIT
+BEGIN
+DROP FUNCTION
+CREATE FUNCTION
+REVOKE
+GRANT
+COMMIT
+BEGIN
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+COMMIT
+DO
+BEGIN
+INSERT 0 2
+SET
+                         fj_set_privacy                          
+-----------------------------------------------------------------
+ {"version": "2026-10-v2", "analytics": true, "interests": true}
+(1 row)
+
+                                                       fj_record_calculation                                                        
+------------------------------------------------------------------------------------------------------------------------------------
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "9b5d336e-d98a-42a8-8bdf-c40f90a1e229", "remainingAtCompletion": 99}
+(1 row)
+
+                                                       fj_record_calculation                                                        
+------------------------------------------------------------------------------------------------------------------------------------
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "880ae3c9-531b-4ee4-a433-e4890f3cca93", "remainingAtCompletion": 99}
+(1 row)
+
+RESET
+DO
+SET
+              set_config              
+--------------------------------------
+ 11111111-1111-4111-8111-111111111111
+(1 row)
+
+DO
+SET
+DO
+RESET
+ROLLBACK
+BEGIN
+INSERT 0 2
+SET
+DO
+RESET
+ROLLBACK
+BEGIN
+INSERT 0 1
+SET
+INSERT 0 1
+DO
+RESET
+ROLLBACK
+BEGIN
+SET
+DO
+RESET
+INSERT 0 1
+SET
+                          fj_set_privacy                          
+------------------------------------------------------------------
+ {"version": "2026-10-v2", "analytics": true, "interests": false}
+(1 row)
+
+DO
+ fj_record_funnel 
+------------------
+ t
+(1 row)
+
+DO
+RESET
+ROLLBACK
+BEGIN
+INSERT 0 2
+SET
+                         fj_set_privacy                          
+-----------------------------------------------------------------
+ {"version": "2026-10-v2", "analytics": true, "interests": true}
+(1 row)
+
+                                                       fj_record_calculation                                                        
+------------------------------------------------------------------------------------------------------------------------------------
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "10e134d6-6c5d-4b37-a6be-1dbc6a68300a", "remainingAtCompletion": 99}
+(1 row)
+
+                                                       fj_record_calculation                                                        
+------------------------------------------------------------------------------------------------------------------------------------
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "46e12793-6852-48df-b0c0-4d447c080ff2", "remainingAtCompletion": 99}
+(1 row)
+
+INSERT 0 1
+RESET
+SET
+              set_config              
+--------------------------------------
+ a0000000-0000-4000-8000-00000000000a
+(1 row)
+
+DO
+RESET
+SET
+ set_config 
+------------
+ 
+(1 row)
+
+DO
+RESET
+CREATE FUNCTION
+CREATE TRIGGER
+SET
+DO
+RESET
+DROP TRIGGER
+SET
+DO
+RESET
+SET
+DO
+RESET
+SET
+DO
+RESET
+SET
+DO
+RESET
+DELETE 1
+DO
+ROLLBACK
+BEGIN
+INSERT 0 3
+DO
+SET
+DO
+RESET
+ROLLBACK
+INSERT 0 2
+INSERT 0 1
+DO
+DO
+PASS: upgrade PostgreSQL migration/RLS/transaction/concurrency tests (Auth stub only)
+# exit 0
