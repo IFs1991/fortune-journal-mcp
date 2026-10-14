@@ -14,7 +14,8 @@ export async function GET(request:Request){
  if(!(name in resources))return Response.json({error:'INVALID_RESOURCE'},{status:400});
  const offset=Number(url.searchParams.get('offset')??'0'),asOf=url.searchParams.get('asOf')??new Date().toISOString();
  if(!Number.isSafeInteger(offset)||offset<0||offset>1000000||!Number.isFinite(Date.parse(asOf))||Date.parse(asOf)>Date.now()+300000)return Response.json({error:'INVALID_PAGE'},{status:400});
- const def=resources[name as keyof typeof resources];
+ // Widen literal column lists: the typed select parser otherwise recurses past TS limits (TS2589).
+ const def:{table:string;columns:string;time:string;order:string}=resources[name as keyof typeof resources];
  let query=adminSupabase().from(def.table).select(def.columns).eq('user_id',user.id).lte(def.time,asOf).order(def.order);
  if(name==='billing')query=query.order('provider');
  const {data,error}=await query.range(offset,offset+100);

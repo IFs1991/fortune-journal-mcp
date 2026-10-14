@@ -12,7 +12,7 @@ export type TarotCard = { index: number; name: string; orientation: 'upright' | 
 
 /** A caller can reuse drawId for reproducible results. No birth or question text is persisted. */
 export function drawTarot(userId: string, signingSecret: string, count: 1 | 3,
-  drawId = randomUUID()): { schemaVersion: '1.0'; algorithm: string; drawId: string; cards: TarotCard[]; disclaimer: string } {
+  drawId: string = randomUUID()): { schemaVersion: '1.0'; algorithm: string; drawId: string; cards: TarotCard[]; disclaimer: string } {
   if (count !== 1 && count !== 3) throw new Error('INVALID_COUNT');
   if (!signingSecret || signingSecret.length < 24) throw new Error('MISSING_SECRET');
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(drawId)) throw new Error('INVALID_DRAW_ID');

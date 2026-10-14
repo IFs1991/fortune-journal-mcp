@@ -1,37 +1,28 @@
 import type { AuthInfo } from '@modelcontextprotocol/server';
 import { publicSupabase } from '@/src/lib/supabase/server';
 import { publicConfig } from '@/src/lib/env';
+import { decodeJwtPayload, validateMcpAccessClaims } from '@/src/domain/oauth-claims';
 
 /**
- * Verify every bearer token with Supabase Auth, then require an OAuth client_id claim.
- * Google web sign-in cookies are not sufficient to call /api/mcp.
- * Supabase OAuth JWTs currently use aud='authenticated' rather than a resource-specific aud;
- * dedicate a Supabase project to this app and test resource-indicator compatibility before launch.
+ * Verify every bearer token with Supabase Auth (signature, session and account liveness),
+ * then require claims bound to this project's issuer, the same user and an OAuth client_id.
+ * Google web sign-in cookies/session JWTs (no client_id) are not sufficient to call /api/mcp.
+ * Supabase OAuth JWTs use aud='authenticated' rather than a resource-specific aud;
+ * the Supabase project must be dedicated to this app (see docs/SECURITY.md).
  */
 export async function verifyOAuthBearer(_req: Request, bearerToken?: string): Promise<AuthInfo | undefined> {
   if (!bearerToken || bearerToken.length > 16_384) return undefined;
+  const payload = decodeJwtPayload(bearerToken);
+  if (!payload || typeof payload.client_id !== 'string') return undefined; // cheap reject before a network call
   try {
-    const supabase = publicSupabase();
-    const {data,error} = await supabase.auth.getUser(bearerToken);
+    const {data,error} = await publicSupabase().auth.getUser(bearerToken);
     if (error || !data.user) return undefined;
-    const parts = bearerToken.split('.');
-    if (parts.length !== 3) return undefined;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<string, unknown>;
     const {supabaseUrl} = publicConfig();
-    const iss = `${supabaseUrl.replace(/\/$/, '')}/auth/v1`;
-    const aud = payload.aud;
-    const goodAudience = aud === 'authenticated' || (Array.isArray(aud) && aud.includes('authenticated'));
-    if (payload.iss !== iss || !goodAudience || payload.sub !== data.user.id ||
-        payload.role !== 'authenticated' || typeof payload.client_id !== 'string' ||
-        !payload.client_id || typeof payload.exp !== 'number' || payload.exp * 1000 <= Date.now()) {
-      return undefined;
-    }
-    return {
-      token: bearerToken,
-      scopes: [],
-      clientId: payload.client_id,
-      extra: {userId: data.user.id},
-    };
+    const claims = validateMcpAccessClaims(payload, {
+      issuer: `${supabaseUrl.replace(/\/$/, '')}/auth/v1`, userId: data.user.id, nowSeconds: Date.now() / 1000,
+    });
+    if (!claims) return undefined;
+    return {token: bearerToken, scopes: [], clientId: claims.clientId, expiresAt: claims.expiresAt, extra: {userId: data.user.id}};
   } catch {
     return undefined;
   }
