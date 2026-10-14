@@ -84,6 +84,10 @@ async function connect(user,clientName){
  ok(t.status===200&&t.body?.access_token,`token exchange ${t.status}`);return {clientId,...t.body};
 }
 
+const ANALYTICS=process.env.PRODUCT_ANALYTICS_ENABLED==='true';
+async function preferences(user,fields){
+ return fetch(`${APP}/api/account/preferences`,{method:'POST',redirect:'manual',headers:{cookie:await cookieHeader(user.session),origin:APP,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams(fields)});
+}
 const created=[];
 try{
  await step('Google-only: email signup, password and OTP sign-in are refused',async()=>{
@@ -110,7 +114,8 @@ try{
   ok(anonPage.status>=300&&anonPage.status<400&&new URL(anonPage.headers.get('location'),APP).pathname==='/login','unauthenticated consent must go to login');
   const cookieA=await cookieHeader(A.session);
   const page=await (await fetch(`${APP}/oauth/consent?authorization_id=${authorizationId}`,{headers:{cookie:cookieA}})).text();
-  ok(page.includes('FJ E2E Client')&&page.includes(REDIRECT),'consent page lacks client name/callback');
+  ok(page.includes('FJ E2E Client')&&page.includes('localhost:9999'),'consent page lacks client name/callback host');
+  ok(page.includes('unverified'),'self-declared DCR client name not flagged as unverified');
   ok((await decide(cookieA,authorizationId,'approve',null)).status===403,'missing Origin accepted');
   ok((await decide(cookieA,authorizationId,'approve','https://evil.example')).status===403,'foreign Origin accepted');
   ok((await decide('',authorizationId,'approve')).status===401,'no session accepted');
@@ -139,6 +144,9 @@ try{
   const names=r.body.result.tools.map(t=>t.name).sort();
   ok(JSON.stringify(names)===JSON.stringify(['calculate_numerology','draw_tarot','get_access_status','get_account_profile','get_journal_schema','report_journal_action','submit_reading_feedback']),`tools: ${names}`);
   ok(r.body.result.tools.every(t=>t._meta?.securitySchemes?.[0]?.type==='oauth2'),'securitySchemes missing');
+  ok(r.body.result.tools.every(t=>t.outputSchema?.type==='object'),'outputSchema missing on a tool');
+  const init=await mcp(accessA.access_token,'initialize',{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'fj-e2e',version:'1.0.0'}});
+  ok(init.status===200&&init.body?.result?.capabilities?.tools&&init.body.result.instructions?.includes('Google Sheets'),`initialize ${init.status}`);
   ok(!names.some(n=>/publish|ops|sql|billing|grant/i.test(n)),'operator tool leaked');
  });
 
@@ -169,16 +177,47 @@ try{
  });
 
  await step('Optional analytics tools refuse when globally disabled; schema tool never claims a Google save',async()=>{
-  ok((await tool(accessA.access_token,'submit_reading_feedback',{readingId:randomUUID(),usefulness:5,matchAssessment:'matched',explicitUserRequest:true})).error==='OPTIONAL_ANALYTICS_DISABLED','feedback accepted while disabled');
-  ok((await tool(accessA.access_token,'report_journal_action',{requestId:randomUUID(),action:'journal_save_reported',explicitUserRequest:true})).error==='OPTIONAL_ANALYTICS_DISABLED','report accepted while disabled');
-  const s=await tool(accessA.access_token,'get_journal_schema');ok(s.ownership==='user_google_drive'&&s.sheets.length===4,'journal schema');
+  if(!ANALYTICS){
+   ok((await tool(accessA.access_token,'submit_reading_feedback',{readingId:randomUUID(),usefulness:5,matchAssessment:'matched',explicitUserRequest:true})).error==='OPTIONAL_ANALYTICS_DISABLED','feedback accepted while disabled');
+   ok((await tool(accessA.access_token,'report_journal_action',{requestId:randomUUID(),action:'journal_save_reported',explicitUserRequest:true})).error==='OPTIONAL_ANALYTICS_DISABLED','report accepted while disabled');
+   ok((await preferences(A,{analytics:'yes'})).status===503,'analytics opt-in accepted while globally disabled');
+  }
+  const s=await tool(accessA.access_token,'get_journal_schema');ok(s.ownership==='user_google_drive'&&s.sheets.length===4&&s.writeRules.some(r=>r.includes('RAW')),'journal schema/write rules');
   const p=await tool(accessA.access_token,'get_account_profile');ok(p.id===A.id&&!JSON.stringify(p).includes('@'),'profile leaks email');
+ });
+
+ if(ANALYTICS)await step('Analytics mode: separate consents, topic only with interest consent, feedback/report, withdrawal deletes optional data',async()=>{
+  // B signed up seconds ago: a near-signup opt-in enters the signup cohort with self-reported source (migration 06 path).
+  const conn=await connect(B,'FJ E2E Analytics');
+  ok((await preferences(B,{analytics:'yes',source:'threads'})).status===303,'opt-in failed');
+  const {data:acc}=await admin.from('user_access').select('analytics_consent_at,interest_consent_at').eq('user_id',B.id).single();
+  ok(acc.analytics_consent_at&&!acc.interest_consent_at,'interest consent inferred from analytics consent');
+  const {data:reg}=await admin.from('funnel_events').select('source_channel,source_evidence').eq('user_id',B.id).eq('event_name','registration');
+  ok(reg?.length===1&&reg[0].source_channel==='threads'&&reg[0].source_evidence==='self_reported','registration cohort/attribution wrong');
+  const r1=await tool(conn.access_token,'calculate_numerology',{birthDate:'1991-09-12',asOf:'2026-10-15',topic:'love'});
+  const {data:t1}=await admin.from('user_readings').select('topic').eq('id',r1.readingId).single();ok(t1.topic===null,'topic stored without interest consent');
+  ok((await preferences(B,{analytics:'yes',interests:'yes'})).status===303,'interest opt-in failed');
+  const r2=await tool(conn.access_token,'calculate_numerology',{birthDate:'1991-09-12',asOf:'2026-10-15',topic:'work'});
+  const {data:t2}=await admin.from('user_readings').select('topic').eq('id',r2.readingId).single();ok(t2.topic==='work','topic not stored with interest consent');
+  const {data:ev}=await admin.from('funnel_events').select('event_name,source_channel').eq('user_id',B.id).eq('event_name','reading_completed');
+  ok(ev.length===2&&ev.every(e=>e.source_channel==='unknown'),'unregistered client labelled as a channel');
+  ok((await tool(conn.access_token,'submit_reading_feedback',{readingId:r2.readingId,usefulness:4,matchAssessment:'mixed',explicitUserRequest:true})).saved===true,'feedback not saved');
+  const {data:other}=await admin.from('user_readings').select('id').eq('user_id',A.id).limit(1).single();
+  ok((await tool(conn.access_token,'submit_reading_feedback',{readingId:other.id,usefulness:4,matchAssessment:'mixed',explicitUserRequest:true})).error==='FEEDBACK_NOT_ACCEPTED','feedback on another user reading accepted');
+  const rep=await tool(conn.access_token,'report_journal_action',{requestId:randomUUID(),action:'journal_save_reported',readingId:r2.readingId,explicitUserRequest:true});
+  ok(rep.recorded===true&&rep.verification==='self_reported_not_independently_verified','report not recorded as self-reported');
+  ok((await preferences(B,{})).status===303,'withdrawal failed');
+  const left=await Promise.all(['funnel_events','reading_feedback'].map(t=>admin.from(t).select('id').eq('user_id',B.id)));
+  ok(left.every(x=>x.data.length===0),'optional events/feedback survived withdrawal');
+  const {data:kept}=await admin.from('user_readings').select('topic').eq('user_id',B.id);ok(kept.length===2&&kept.every(k=>k.topic===null),'operational ledger lost or topics kept');
  });
 
  await step('Data API: user A sees only own rows, cannot escalate; B cannot see A',async()=>{
   const a=userClient(A.session),b=userClient(B.session);
   const {data:own}=await a.from('user_access').select('user_id,trial_ends_at');ok(own?.length===1&&own[0].user_id===A.id,'A cannot read own access row');
-  const {data:readsB}=await b.from('user_readings').select('id');ok((readsB??[]).length===0,'B reads A readings');
+  const {data:readsB}=await b.from('user_readings').select('id,user_id');ok((readsB??[]).every(r=>r.user_id===B.id),'B reads another user\'s readings');
+  const {data:aViaB}=await b.from('user_readings').select('id').eq('user_id',A.id);ok((aViaB??[]).length===0,'B reads A readings');
+  const {data:aOwn}=await a.from('user_readings').select('id');ok((aOwn??[]).length>0,'A cannot read own readings (vacuous isolation test)');
   ok((await a.from('user_readings').select('request_fingerprint')).error,'fingerprint column readable');
   ok((await a.from('user_access').update({trial_ends_at:'2099-01-01T00:00:00Z'}).eq('user_id',A.id).select()).error,'A extended own trial');
   ok((await a.from('usage_counters').delete().eq('user_id',A.id).select()).error,'A reset quota');
@@ -231,6 +270,6 @@ try{
 }finally{
  for(const id of created)await admin.auth.admin.deleteUser(id).catch(()=>{});
 }
-const summary={ranAt:new Date().toISOString(),target:{supabase:'local CLI stack (loopback)',app:APP},passed:results.length-failures,failed:failures,results};
+const summary={ranAt:new Date().toISOString(),analyticsMode:ANALYTICS,target:{supabase:'local CLI stack (loopback)',app:APP},passed:results.length-failures,failed:failures,results};
 const outIndex=process.argv.indexOf('--out');if(outIndex>0)writeFileSync(process.argv[outIndex+1],JSON.stringify(summary,null,2)+'\n');
 console.log(`${summary.passed} passed / ${failures} failed`);process.exitCode=failures?1:0;
