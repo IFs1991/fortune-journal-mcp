@@ -1,0 +1,50 @@
+name: Source and database verification
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fortune-journal-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2; review pin before release
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0; review pin before release
+        with:
+          node-version: '22.16.0'
+      - run: npm test
+      - run: npm run check:static
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: bash scripts/test-db.sh
+  full-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.16.0'
+      - name: Require reviewed lockfile
+        run: test -f package-lock.json || { echo 'BLOCKED - resolve/review exact package pins and commit a real lockfile first'; exit 1; }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          APP_ORIGIN: https://example.invalid
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: compile_only_placeholder
+      # No deployment, no production secrets, no live social posting and no payment actions.

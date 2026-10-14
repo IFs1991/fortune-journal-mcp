@@ -1,0 +1,5 @@
+
+> fortune-journal-mcp@0.2.0 test:db
+> bash scripts/test-db.sh
+
+BLOCKED: Docker/PostgreSQL runtime unavailable; SQL/RLS tests were not run.

@@ -1,0 +1,93 @@
+{
+  "version": "0.2.0",
+  "date_utc": "2026-10-14T01:38:03.118449+00:00",
+  "environment": {
+    "node": "v22.16.0",
+    "npm": "10.9.2"
+  },
+  "checks": [
+    {
+      "check": "unit",
+      "command": "npm test",
+      "status": "passed",
+      "exit_code": 0,
+      "log": "unit.log"
+    },
+    {
+      "check": "static",
+      "command": "npm run check:static",
+      "status": "passed",
+      "exit_code": 0,
+      "log": "static.log"
+    },
+    {
+      "check": "syntax",
+      "command": "npm run check:syntax",
+      "status": "passed",
+      "exit_code": 0,
+      "log": "syntax.log"
+    },
+    {
+      "check": "pure_types",
+      "command": "npm run check:pure-types",
+      "status": "passed",
+      "exit_code": 0,
+      "log": "pure_types.log"
+    },
+    {
+      "check": "shell",
+      "command": "bash -n scripts/test-db.sh",
+      "status": "passed",
+      "exit_code": 0,
+      "log": "shell.log"
+    },
+    {
+      "check": "db",
+      "command": "npm run test:db",
+      "status": "blocked",
+      "exit_code": 2,
+      "log": "db.log"
+    },
+    {
+      "check": "migration_prepare",
+      "command": "npm run db:prepare",
+      "status": "blocked",
+      "exit_code": 1,
+      "log": "migration_prepare.log"
+    },
+    {
+      "check": "full_types",
+      "command": "npm run typecheck",
+      "status": "blocked",
+      "exit_code": 2,
+      "log": "full_types.log"
+    },
+    {
+      "check": "production_build",
+      "command": "npm run build",
+      "status": "blocked",
+      "exit_code": 127,
+      "log": "production_build.log"
+    },
+    {
+      "check": "historical_migration_integrity",
+      "status": "passed",
+      "sha256": "6e2155b09d924ef10827de1d300341f840e1c3006962d5e4ceb8a85d8578b5ec"
+    },
+    {
+      "check": "json_parse",
+      "status": "passed",
+      "files": 10
+    }
+  ],
+  "not_executed": [
+    "real Supabase/Auth/RLS tests",
+    "real Meta read or publish",
+    "real Google connector writes",
+    "Vercel deployment",
+    "payment provider verification",
+    "npm registry package/peer resolution",
+    "real ChatGPT/Claude MCP OAuth E2E"
+  ],
+  "final_source_checked_at_utc": "2026-10-14T01:41:16.282111+00:00"
+}

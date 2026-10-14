@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "fortune-journal": {
+      "type": "http",
+      "url": "https://YOUR-DOMAIN.example/api/mcp"
+    }
+  }
+}

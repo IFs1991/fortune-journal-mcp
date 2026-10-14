@@ -1,0 +1,5 @@
+
+> fortune-journal-mcp@0.2.0 check:pure-types
+> node scripts/check-pure-types.mjs
+
+Pure-domain/integration type check PASS (9 files). Next/MCP/Supabase types are not included.

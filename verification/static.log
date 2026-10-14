@@ -1,0 +1,5 @@
+
+> fortune-journal-mcp@0.2.0 check:static
+> node scripts/check-static.mjs
+
+PASS: static contracts (11 tables, 5 additive SQL stages, 7 MCP tools). This does NOT execute SQL, typecheck dependencies, build, or exercise real providers.

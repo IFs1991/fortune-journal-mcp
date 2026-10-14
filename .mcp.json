@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "fortune-journal": {
+      "url": "https://REPLACE-WITH-VERCEL-DOMAIN.example/api/mcp"
+    }
+  }
+}

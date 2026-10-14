@@ -1,0 +1,34 @@
+{
+  "version": "0.2.0",
+  "initial": {
+    "file": "20261014000100_initial_schema.sql",
+    "sha256": "6e2155b09d924ef10827de1d300341f840e1c3006962d5e4ceb8a85d8578b5ec"
+  },
+  "templates": [
+    {
+      "file": "01_growth_operations.sql",
+      "slug": "fj_v02_01_growth_operations",
+      "sha256": "84bf71bec495803fbd70d379f27d80484138b45f4171709787a099fac3f2aeaf"
+    },
+    {
+      "file": "02_product_telemetry_and_billing.sql",
+      "slug": "fj_v02_02_product_telemetry_and_billing",
+      "sha256": "34af8f6d0f165ea1631bccca441954e61ebac396f738125876bfb3227f486f19"
+    },
+    {
+      "file": "03_transactional_commands.sql",
+      "slug": "fj_v02_03_transactional_commands",
+      "sha256": "79e8fdce177b37811cc6c354ed1db39b315eeb8343fdf4067eb6858ea621608a"
+    },
+    {
+      "file": "04_billing_and_kpis.sql",
+      "slug": "fj_v02_04_billing_and_kpis",
+      "sha256": "bceabcf3d0c231f0cd452ca3c498b555a64afed111b3d6afae78049083226490"
+    },
+    {
+      "file": "05_retention_and_security.sql",
+      "slug": "fj_v02_05_retention_and_security",
+      "sha256": "282061be761cf8f8c53180a68559bc1ab2c4c3fb9fd6e6f8d2aff90327947f95"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "requestId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "action": "draft_post",
+  "body": "What is one small step that could make work feel clearer today? Treat this as a reflection prompt, not a prediction.",
+  "topic": "work",
+  "method": "numerology",
+  "tone": "question",
+  "language": "en",
+  "ctaKey": "reflect",
+  "promptVersion": "reflection-v1",
+  "experimentId": "threads-theme-tone-001",
+  "variantKey": "work-question"
+}
