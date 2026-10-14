@@ -1,4 +1,6 @@
-# Verification results — 2026-10-15 / v0.2.1 (commit 64de536 + evidence)
+# Verification results — 2026-10-15 / v0.2.1 (commit b0def30 + evidence)
+
+> コミットIDについて: 検証は作者情報の書き換え前に実行した。書き換えで内容（tree）は変わらずIDだけが変わったため、旧 `64de536` = 現 `b0def30`。生ログ（`npm_ci_clean_clone.log` 等）はコマンド出力のまま残しており、旧IDが表示される。
 
 このファイルは**実行したものだけ**をPASSとする。command・exit code・開始時刻・環境は [results.json](results.json)、出力は同名ログ。
 環境: Windows 11 + Git Bash、Node 22.22.2、npm 10.9.7、Docker 29.8.2、Supabase CLI 2.120.0、psql 17.11。
