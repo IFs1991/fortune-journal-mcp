@@ -1,5 +1,5 @@
 $ bash scripts/test-db.sh
-# started 2026-10-14T16:55:44Z
+# started 2026-10-14T17:05:52Z
 DO
 CREATE SCHEMA
 CREATE TABLE
@@ -145,12 +145,12 @@ SET
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "6db209d7-0326-4357-9018-ffe21a3f26ac", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "a52d6915-6b4e-40c1-9247-9f76ff27b209", "remainingAtCompletion": 99}
 (1 row)
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "18de160f-e671-4c34-bdba-c4158d78a889", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "dee55a2b-fe69-41fb-83ac-b17e691d0b49", "remainingAtCompletion": 99}
 (1 row)
 
 RESET
@@ -209,12 +209,12 @@ SET
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "3e7c1fcf-b34d-490e-83c0-f7f9c28170b9", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "762a10de-2eba-485c-bdfa-90dacbf0d6bb", "remainingAtCompletion": 99}
 (1 row)
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "86fb9dd2-8418-4242-bfde-44290e13de11", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "8fee5743-b792-4787-be2a-098eca5ff4fa", "remainingAtCompletion": 99}
 (1 row)
 
 INSERT 0 1
@@ -416,12 +416,12 @@ SET
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "9b5d336e-d98a-42a8-8bdf-c40f90a1e229", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "5861b3c2-9267-4cda-b3dc-84d06104672a", "remainingAtCompletion": 99}
 (1 row)
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "880ae3c9-531b-4ee4-a433-e4890f3cca93", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "bbea7d2c-6d28-4a62-b2d2-462737d103eb", "remainingAtCompletion": 99}
 (1 row)
 
 RESET
@@ -480,12 +480,12 @@ SET
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "10e134d6-6c5d-4b37-a6be-1dbc6a68300a", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "3f5d0f0f-c1f1-416f-abcb-2fc4d0137c17", "remainingAtCompletion": 99}
 (1 row)
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "46e12793-6852-48df-b0c0-4d447c080ff2", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "940c64a5-a15e-4412-ae37-13acfaf5c21e", "remainingAtCompletion": 99}
 (1 row)
 
 INSERT 0 1

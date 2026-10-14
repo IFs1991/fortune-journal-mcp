@@ -1,7 +1,7 @@
 $ npm run db:check-prepared && sha256sum supabase/migrations/*.sql && cat supabase/template-lock.json
-# started 2026-10-14T16:55:43Z
+# started 2026-10-14T17:05:50Z
 
-> fortune-journal-mcp@0.2.0 db:check-prepared
+> fortune-journal-mcp@0.2.1 db:check-prepared
 > node scripts/prepare-migrations.mjs --check
 
 Prepared 5 additive migrations via official CLI. No remote database was changed.

@@ -1,12 +1,12 @@
 {
-  "ranAt": "2026-10-14T16:57:39.201Z",
+  "ranAt": "2026-10-14T17:07:44.813Z",
   "analyticsMode": false,
   "operationsMode": false,
   "target": {
     "supabase": "local CLI stack (loopback)",
     "app": "http://localhost:3000"
   },
-  "passed": 15,
+  "passed": 17,
   "failed": 0,
   "results": [
     {
@@ -34,6 +34,10 @@
       "result": "PASS"
     },
     {
+      "name": "Tarot retry on a later day replays the original draw instead of charging again",
+      "result": "PASS"
+    },
+    {
       "name": "Free tier after trial: tarot denied, numerology 3/ISO-week then USAGE_LIMIT_REACHED",
       "result": "PASS"
     },
@@ -43,6 +47,10 @@
     },
     {
       "name": "Data API: user A sees only own rows, cannot escalate; B cannot see A",
+      "result": "PASS"
+    },
+    {
+      "name": "Export: own data only, paged, no fingerprint; requires a session",
       "result": "PASS"
     },
     {

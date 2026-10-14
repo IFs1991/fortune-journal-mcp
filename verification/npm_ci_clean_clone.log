@@ -1,18 +1,19 @@
-$ cat 'C:/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/9a355fc9-2bcb-43c4-b426-39441b23783b/scratchpad/clean-ci.log'
-# started 2026-10-14T16:54:39Z
+$ rm -rf 'C:/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/9a355fc9-2bcb-43c4-b426-39441b23783b/scratchpad/clean' && git clone -q . 'C:/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/9a355fc9-2bcb-43c4-b426-39441b23783b/scratchpad/clean' && cd 'C:/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/9a355fc9-2bcb-43c4-b426-39441b23783b/scratchpad/clean' && git log --oneline -1 && npm ci --no-fund && npm test 2>&1 | grep -E '^# (pass|fail)' && npm run typecheck && npm run db:check-prepared
+# started 2026-10-14T17:03:28Z
+64de536 docs: DoD with PASS/FAIL/BLOCKED/NOT RUN, AGENTS/CLAUDE/BUILD_STATUS/UPGRADE/SECURITY/CHANGELOG/README for v0.2.1
+
+added 44 packages, and audited 45 packages in 57s
 
 found 0 vulnerabilities
 # pass 39
 # fail 0
 
- ✓ Compiled successfully in 20.5s
+> fortune-journal-mcp@0.2.1 typecheck
+> tsc --noEmit
+
+
+> fortune-journal-mcp@0.2.1 db:check-prepared
+> node scripts/prepare-migrations.mjs --check
+
 Prepared 5 additive migrations via official CLI. No remote database was changed.
-6e2155b09d924ef10827de1d300341f840e1c3006962d5e4ceb8a85d8578b5ec *supabase/migrations/20261014000100_initial_schema.sql
-84bf71bec495803fbd70d379f27d80484138b45f4171709787a099fac3f2aeaf *supabase/migrations/20261014160916_fj_v02_01_growth_operations.sql
-34af8f6d0f165ea1631bccca441954e61ebac396f738125876bfb3227f486f19 *supabase/migrations/20261014160919_fj_v02_02_product_telemetry_and_billing.sql
-79e8fdce177b37811cc6c354ed1db39b315eeb8343fdf4067eb6858ea621608a *supabase/migrations/20261014160922_fj_v02_03_transactional_commands.sql
-bceabcf3d0c231f0cd452ca3c498b555a64afed111b3d6afae78049083226490 *supabase/migrations/20261014160925_fj_v02_04_billing_and_kpis.sql
-282061be761cf8f8c53180a68559bc1ab2c4c3fb9fd6e6f8d2aff90327947f95 *supabase/migrations/20261014160928_fj_v02_05_retention_and_security.sql
-d75a7d53af932c6861ee34231adbb30029e2ae778176c7a2f187102a54589e69 *supabase/migrations/20261014162204_fj_v02_06_privacy_registration_forward_fix.sql
-exit=0
 # exit 0

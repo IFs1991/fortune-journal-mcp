@@ -1,7 +1,7 @@
 $ rm -rf .next && env -u APP_ORIGIN -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_TELEMETRY_DISABLED=1 npm run build
-# started 2026-10-14T16:54:51Z
+# started 2026-10-14T17:05:00Z
 
-> fortune-journal-mcp@0.2.0 build
+> fortune-journal-mcp@0.2.1 build
 > next build
 
    ▲ Next.js 15.5.27
@@ -9,7 +9,7 @@ $ rm -rf .next && env -u APP_ORIGIN -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_S
    Creating an optimized production build ...
 <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (113kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
 <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (268kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
- ✓ Compiled successfully in 15.4s
+ ✓ Compiled successfully in 15.7s
    Linting and checking validity of types ...
    Collecting page data ...
    Generating static pages (0/13) ...

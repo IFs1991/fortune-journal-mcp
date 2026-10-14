@@ -1,5 +1,5 @@
 $ bash scripts/test-supabase-local.sh
-# started 2026-10-14T16:56:22Z
+# started 2026-10-14T17:06:30Z
 PASS: rls_security (local Supabase stack)
 PASS: v02_security (local Supabase stack)
 PASS: v02_transactions (local Supabase stack)
