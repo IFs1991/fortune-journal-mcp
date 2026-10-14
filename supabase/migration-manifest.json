@@ -36,6 +36,11 @@
       "file": "20261014162204_fj_v02_06_privacy_registration_forward_fix.sql",
       "sha256": "d75a7d53af932c6861ee34231adbb30029e2ae778176c7a2f187102a54589e69",
       "fixes": "03_transactional_commands.sql fj_set_privacy read auth.users as service_role"
+    },
+    {
+      "file": "20261014164844_fj_v02_07_fk_covering_indexes.sql",
+      "sha256": "d01b14f052a4063dd6f5d51858bbc9d88af2efa146160355dab9227b8810dd12",
+      "fixes": "advisor unindexed_foreign_keys: purge cascades scanned child tables"
     }
   ]
 }
