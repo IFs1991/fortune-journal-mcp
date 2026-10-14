@@ -9,3 +9,6 @@ node_modules/
 coverage/
 *.log
 !verification/*.log
+supabase/.temp/
+supabase/.branches/
+supabase/signing_keys.json
