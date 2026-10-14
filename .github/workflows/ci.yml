@@ -1,50 +1,91 @@
 name: Source and database verification
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: fortune-journal-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+# No deployment, no production/staging secrets, no live social posting and no payment actions in CI.
+# Action pins verified against GitHub tag refs on 2026-10-15.
 jobs:
-  unit:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2; review pin before release
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0; review pin before release
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22.16.0'
+          cache: npm
+      - run: npm ci
       - run: npm test
       - run: npm run check:static
-  database:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          persist-credentials: false
-      - run: bash scripts/test-db.sh
-  full-build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '22.16.0'
-      - name: Require reviewed lockfile
-        run: test -f package-lock.json || { echo 'BLOCKED - resolve/review exact package pins and commit a real lockfile first'; exit 1; }
-      - run: npm ci
+      - run: npm run db:check-prepared
       - run: npm run typecheck
       - run: npm run build
         env:
           APP_ORIGIN: https://example.invalid
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: compile_only_placeholder
-      # No deployment, no production secrets, no live social posting and no payment actions.
+          NEXT_TELEMETRY_DISABLED: '1'
+      - run: npm audit --audit-level=high
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - run: bash scripts/test-db.sh
+  supabase-local:
+    # Real Supabase stack from the CLI: Supabase Postgres image + GoTrue OAuth 2.1 server + PostgREST.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.120.0
+      - run: npm ci
+      - run: supabase start
+      - run: bash scripts/test-supabase-local.sh
+      - name: Build and start the app against the local stack (throwaway secrets)
+        run: |
+          node -e '
+          const s=JSON.parse(require("child_process").execSync("supabase status -o json",{encoding:"utf8"}));
+          const r=()=>require("crypto").randomBytes(32).toString("hex");
+          const env={APP_ORIGIN:"http://localhost:3000",NEXT_PUBLIC_SUPABASE_URL:s.API_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:s.PUBLISHABLE_KEY,
+           SUPABASE_SECRET_KEY:s.SECRET_KEY,REQUEST_HMAC_KEY:r(),TAROT_HMAC_KEY:r(),TAROT_KEY_VERSION:"v1",OPS_HMAC_KEY:r(),ATTRIBUTION_HMAC_KEY:r(),
+           CRON_SECRET:r(),MCP_CLIENT_NAMES_JSON:"{}",NEXT_TELEMETRY_DISABLED:"1"};
+          require("fs").writeFileSync(process.env.RUNNER_TEMP+"/fj.env",Object.entries(env).map(([k,v])=>k+"="+v).join("\n")+"\n");'
+          set -a; . "$RUNNER_TEMP/fj.env"; set +a
+          npm run build
+      - name: E2E (analytics off)
+        run: |
+          set -a; . "$RUNNER_TEMP/fj.env"; set +a
+          PRODUCT_ANALYTICS_ENABLED=false node node_modules/next/dist/bin/next start -p 3000 > "$RUNNER_TEMP/app-off.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/app.pid"
+          for i in $(seq 1 40); do curl -sf -o /dev/null http://localhost:3000/api/health && break; sleep 1; done
+          node scripts/e2e-local.mjs
+          kill "$(cat "$RUNNER_TEMP/app.pid")"; for i in $(seq 1 20); do curl -sf -o /dev/null http://localhost:3000/api/health || break; sleep 1; done
+      - name: E2E (analytics on)
+        run: |
+          set -a; . "$RUNNER_TEMP/fj.env"; set +a
+          export PRODUCT_ANALYTICS_ENABLED=true
+          node node_modules/next/dist/bin/next start -p 3000 > "$RUNNER_TEMP/app-on.log" 2>&1 &
+          for i in $(seq 1 40); do curl -sf -o /dev/null http://localhost:3000/api/health && break; sleep 1; done
+          node scripts/e2e-local.mjs
+      - if: always()
+        run: supabase stop --no-backup
