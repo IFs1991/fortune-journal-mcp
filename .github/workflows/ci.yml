@@ -75,7 +75,8 @@ jobs:
       - name: E2E (analytics off)
         run: |
           set -a; . "$RUNNER_TEMP/fj.env"; set +a
-          PRODUCT_ANALYTICS_ENABLED=false node node_modules/next/dist/bin/next start -p 3000 > "$RUNNER_TEMP/app-off.log" 2>&1 &
+          export PRODUCT_ANALYTICS_ENABLED=false OPERATIONS_ENABLED=false
+          node node_modules/next/dist/bin/next start -p 3000 > "$RUNNER_TEMP/app-off.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/app.pid"
           for i in $(seq 1 40); do curl -sf -o /dev/null http://localhost:3000/api/health && break; sleep 1; done
           node scripts/e2e-local.mjs
@@ -83,7 +84,7 @@ jobs:
       - name: E2E (analytics on)
         run: |
           set -a; . "$RUNNER_TEMP/fj.env"; set +a
-          export PRODUCT_ANALYTICS_ENABLED=true
+          export PRODUCT_ANALYTICS_ENABLED=true OPERATIONS_ENABLED=true
           node node_modules/next/dist/bin/next start -p 3000 > "$RUNNER_TEMP/app-on.log" 2>&1 &
           for i in $(seq 1 40); do curl -sf -o /dev/null http://localhost:3000/api/health && break; sleep 1; done
           node scripts/e2e-local.mjs

@@ -1,11 +1,12 @@
 {
-  "ranAt": "2026-10-14T16:43:08.304Z",
+  "ranAt": "2026-10-14T16:52:15.374Z",
   "analyticsMode": false,
+  "operationsMode": false,
   "target": {
     "supabase": "local CLI stack (loopback)",
     "app": "http://localhost:3000"
   },
-  "passed": 13,
+  "passed": 15,
   "failed": 0,
   "results": [
     {
@@ -54,6 +55,14 @@
     },
     {
       "name": "OAuth: deny returns access_denied to the client; another user cannot act on A's request",
+      "result": "PASS"
+    },
+    {
+      "name": "Cron: bearer CRON_SECRET required; maintenance purges via the app (Threads insights off)",
+      "result": "PASS"
+    },
+    {
+      "name": "Ops API: separate HMAC, disabled by default; signed report works only when enabled",
       "result": "PASS"
     },
     {

@@ -9,6 +9,7 @@ import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {writeFileSync} from 'node:fs';
 import {createClient} from '@supabase/supabase-js';
 import {createServerClient} from '@supabase/ssr';
+import {signOps} from '../src/domain/security.ts';
 
 const loopback=u=>['127.0.0.1','localhost','[::1]'].includes(new URL(u).hostname);
 const status=JSON.parse(spawnSync('supabase',['status','-o','json'],{encoding:'utf8',input:''}).stdout||'{}');
@@ -261,6 +262,26 @@ try{
   const cb=new URL(res.headers.get('location'));ok(cb.searchParams.get('error')==='access_denied'&&!cb.searchParams.get('code'),'deny did not return access_denied');
  });
 
+ await step('Cron: bearer CRON_SECRET required; maintenance purges via the app (Threads insights off)',async()=>{
+  ok((await fetch(`${APP}/api/cron/maintenance`)).status===401,'cron without secret');
+  ok((await fetch(`${APP}/api/cron/maintenance`,{headers:{authorization:'Bearer wrong-secret-wrong-secret-wrong-secret'}})).status===401,'cron with wrong secret');
+  if(!process.env.CRON_SECRET)throw new Error('CRON_SECRET not provided to the E2E process; source the same env as the app');
+  const r=await fetch(`${APP}/api/cron/maintenance`,{headers:{authorization:`Bearer ${process.env.CRON_SECRET}`}});const body=await r.json();
+  ok(r.status===200&&body.insights==='disabled'&&body.results.every(x=>x.purged!==false),`maintenance ${r.status} ${JSON.stringify(body).slice(0,120)}`);
+ });
+
+ await step('Ops API: separate HMAC, disabled by default; signed report works only when enabled',async()=>{
+  const body=JSON.stringify({requestId:randomUUID(),action:'report',from:new Date(Date.now()-7*864e5).toISOString(),until:new Date().toISOString()});
+  const send=(b,sig,ts=String(Math.floor(Date.now()/1000)))=>fetch(`${APP}/api/ops`,{method:'POST',headers:{'content-type':'application/json','x-fj-timestamp':ts,'x-fj-signature':sig},body:b});
+  if(process.env.OPERATIONS_ENABLED!=='true'){ok((await send(body,'0'.repeat(64))).status===503,'ops reachable while disabled');return;}
+  const ts=String(Math.floor(Date.now()/1000)),sig=signOps(process.env.OPS_HMAC_KEY,'POST','/api/ops',ts,body);
+  ok((await send(body,'0'.repeat(64),ts)).status===401,'unsigned ops accepted');
+  ok((await send(body.replace('report','report '),sig,ts)).status===401,'tampered body accepted');
+  ok((await send(body,sig,String(Number(ts)-600))).status===401,'stale timestamp accepted');
+  const r=await send(body,sig,ts);const out=await r.json();
+  ok(r.status===200&&Array.isArray(out.caveats)&&out.cohorts?.population==='consented_near_signup_accounts_only',`signed report ${r.status} ${JSON.stringify(out).slice(0,160)}`);
+ });
+
  await step('Account deletion: confirmation + Origin required; afterwards OAuth tokens are rejected',async()=>{
   const C=await newUser('c');created.push(C.id);const conn=await connect(C,'FJ E2E Delete');
   ok((await mcp(conn.access_token,'tools/list')).status===200,'C token not working before deletion');
@@ -276,6 +297,6 @@ try{
 }finally{
  for(const id of created)await admin.auth.admin.deleteUser(id).catch(()=>{});
 }
-const summary={ranAt:new Date().toISOString(),analyticsMode:ANALYTICS,target:{supabase:'local CLI stack (loopback)',app:APP},passed:results.length-failures,failed:failures,results};
+const summary={ranAt:new Date().toISOString(),analyticsMode:ANALYTICS,operationsMode:process.env.OPERATIONS_ENABLED==='true',target:{supabase:'local CLI stack (loopback)',app:APP},passed:results.length-failures,failed:failures,results};
 const outIndex=process.argv.indexOf('--out');if(outIndex>0)writeFileSync(process.argv[outIndex+1],JSON.stringify(summary,null,2)+'\n');
 console.log(`${summary.passed} passed / ${failures} failed`);process.exitCode=failures?1:0;
