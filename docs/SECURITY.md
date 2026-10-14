@@ -1,19 +1,25 @@
-# Security model / release gates
+# Security model / release gates (v0.2.1)
 
-- Google loginはSupabase Auth。MCPには別のOAuthクライアント認可を要求。
-- bearerはAuthのgetUserで検証後、issuer/audience/role/sub/client_id/expiryを確認。resource-specific audienceへの対応は実OAuth側の仕様を再確認。共有Supabase projectを使わない。
+- Google loginはSupabase Auth（Email/Password/OTP/Anonymousは無効、ローカルE2Eで拒否を確認）。MCPには別のOAuth 2.1クライアント認可（Supabase OAuth Server、PKCE S256）を要求する。
+- `/api/mcp` のbearerは、①JWT payloadに `client_id` がなければネットワーク前に拒否 → ②`auth.getUser` で署名・セッション・アカウント存続を検証 → ③`src/domain/oauth-claims.ts` で issuer / aud=`authenticated` / sub一致 / role=`authenticated` / client_id / exp を検証（unitテスト）。ブラウザセッションJWT（client_idなし）は401（E2E）。
+- Supabase OAuthのaccess tokenはresource固有audience（RFC 8707）を持たない。**このアプリ専用のSupabase projectを使う**ことでaudienceの混同を防ぐ。共有projectは不可。
+- 401の `WWW-Authenticate` は `resource_metadata` を `APP_ORIGIN` に固定（`X-Forwarded-Host` 偽装を無視、smoke確認）。PRM `/.well-known/oauth-protected-resource[/api/mcp]`。
+- 同意画面: client名、callback host、要求scopeを表示。Dynamic Client Registrationのclient名は自己申告のため、`MCP_CLIENT_NAMES_JSON` に登録されたclient_id以外は「unverified」と表示して警告する。approve/denyは同一Origin POST + セッション必須。redirect先はSupabaseが返すURLのみ（POST bodyから受け取らない）。他ユーザーのauthorization_idは操作不可（E2E）。
+- 接続解除: `/login` の Connected AI apps → `/api/oauth/revoke`（同一Origin POST）→ `supabase.auth.oauth.revokeGrant`。当該clientのセッションとrefresh tokenが失効し、既存access tokenも次の `getUser` で401（E2E）。RFC 7009 revocation endpointはSupabase AS metadataに広告されていない。
 - service_roleはサーバーのみ。public URL/publishable keyとsecretを混同しない。
-- table RLS＋列GRANT。運営表と課金eventは顧客に直接非公開。全fj_RPCはservice_role専用、SECURITY INVOKER／search_path固定。
+- table RLS＋列GRANT。運営表と課金eventは顧客に直接非公開。全fj_ RPCはservice_role専用、SECURITY INVOKER／`search_path=''`。auth schemaへの追加GRANTはしない（06の修正方針）。
 - 顧客のcookie変更APIはOriginチェック、IDは実Authから。入力にowner/user IDを受け取らない。
-- opsには独立HMAC。timestamp±300秒、constant-time比較、body64KiB、query禁止、allowlistのみ。暗号署名は同じ5分以内のread-only再送まで禁止するnonce ledgerではない。永続writeはDBのrequest/post/runキーで冪等性を確保。
-- secretsは3種類以上を共用しない。TAROT／REQUESTの鍵変更は再現性/90日dedupに影響し、計画と版変更が必要。
-- approvalは投稿bodyハッシュに拘束。本文は運営内容だけ。承認と取得の間で本文が変更されたらclaimを拒否。
-- Meta呼出しは固定origin、redirect:error、Authorization header、pagination cursorのみ。原文provider error、access token、顧客inputをログに出さない。
-- Payment provider未承認。webhookは501で停止。生署名未検証のデータから台帳や権限を変えない。
-- スプレッドシートtextはuntrusted、式注入escapeは顧客用手順に残す。正しいGoogle connector権限と書き込み承認は別途必要。
+- opsには独立HMAC（method/path/timestamp/body）。timestamp±300秒、constant-time比較、body64KiB、query禁止、allowlistのみ（E2Eで無署名・改ざん・期限切れを401確認）。nonce ledgerではないため5分以内のread-only再送は防がない。永続writeはDBのrequest/post/runキーで冪等。
+- secretsは用途ごとに独立。TAROT／REQUESTの鍵変更は再現性/90日dedupに影響し、計画と版変更が必要。
+- approvalは投稿bodyハッシュに拘束。公開結果不明はunknownのまま再投稿しない。
+- Meta呼出しは固定origin、redirect:error、Authorization header、pagination cursorのみ。
+- Payment provider未承認。webhookは501で停止。
+- スプレッドシートtextはuntrusted。`get_journal_schema.writeRules` でRAW書込み/アポストロフィ、record_id重複防止、拒否時に保存したと言わないことを顧客AIへ指示する。
+- 依存: next 15.5.27（15.5.19のcritical advisoryを解消）、postcss 8.5.30 / sharp 0.35.5 override、`npm audit` 0件。CIでも `npm audit --audit-level=high`。
 
 ## 残留リスク
 
-RLSはservice_role流出を防がない。HMAC secret流出は運営コマンド全権に相当する。接続環境ごとに鍵を分離し、secret管理・アクセスログ・失効・バックアップ・監視を実機で検証する。匿名公開エンドポイントへのレート制限はVercel側の設定確認が必要。依存の重大脆弱性と全OAuth/CSRF経路は未検証で、公開ブロッカー。
-
-削除後のJWTは単にAuthユーザーを消しただけで即失効するとは限らない。この実装は利用停止とsignoutを先に行い、毎リクエストのgetUser/台帳チェックを行う。接続解除・token refresh・削除直後アクセスのE2Eで確認する。
+- RLSはservice_role流出を防がない。HMAC secret流出は運営コマンド全権に相当する。鍵を環境ごとに分離し、Vercel Sensitive env・アクセスログ・失効手順を実Stagingで確認する。
+- アプリ内レート制限なし。`/api/mcp`・`/api/ops`・`/oauth/*` はVercel Firewallのrate limitを推奨（未設定）。トークン付きの不正リクエストは1件ごとにSupabase Authへの問い合わせを発生させる。
+- MCP SDKのentryはOrigin/Host検証をしない。bearer必須のリモートサーバーでありcookie認証を使わないためDNS rebindingの実害は限定的だが、Firewallでの制限を推奨。
+- 実Google、ChatGPT/Claude実ホスト、Staging Supabaseでの同等確認は未実施（DoD: BLOCKED）。

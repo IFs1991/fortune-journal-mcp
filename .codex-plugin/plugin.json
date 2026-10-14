@@ -1,6 +1,6 @@
 {
   "name": "fortune-journal",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Reflect on fortune calculations and life events using your own Google Sheets, without storing your journal on Fortune Journal servers.",
   "skills": "./skills/",
   "interface": {

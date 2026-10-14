@@ -26,3 +26,8 @@ Co–Star / CHANI / The Pattern / Astrotalk / LINE占いの5事例から導い�
 ## Explicit product assumptions
 
 Free/Trial/Premiumの限度、14日Trial、価格候補$4.99、90/400日保持、hourly cron・2h計測窓、1日2投稿は設計仮説。法律・ホスト規約・Meta権限・支払事業者の承認・顧客同意を代替しない。
+
+## Verified versions (2026-10-15)
+
+Checked against the npm registry and the installed packages' own type declarations/READMEs (not memory):
+next 15.5.27, react/react-dom 19.2.3, @modelcontextprotocol/server 2.3.1, mcp-handler 2.3.0 (MCP 2026-07-28 native + 2025 stateless fallback), @supabase/supabase-js 2.117.3 (auth `oauth.getAuthorizationDetails/approveAuthorization/denyAuthorization/listGrants/revokeGrant`), @supabase/ssr 0.12.7, zod 4.2.1, typescript 5.8.3, Supabase CLI 2.120.0, local GoTrue v2.197.0 OAuth 2.1 server (AS metadata at `/auth/v1/.well-known/oauth-authorization-server`, S256 PKCE, DCR, no RFC 7009 revocation endpoint advertised). Hosted Supabase/Vercel behaviour still needs Staging confirmation.

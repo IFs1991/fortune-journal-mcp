@@ -1,4 +1,4 @@
-# Database / grants / RLS v0.2
+# Database / grants / RLS v0.2.1
 
 PostgreSQL 17での検証を想定（security_invoker view / NULLS NOT DISTINCTにPG15+が必要）。Supabase Auth標準表は自作しません。アプリ表は11、追加の独自プロフィール・巨大占い知識DBはありません。
 
@@ -51,4 +51,6 @@ Vercelの認証付きmaintenanceがpurgeを日次で呼びます。ジョブ設�
 
 ## テスト
 
-`supabase/tests/`は匿名/A/B、列権限、禁止更新、RPC否認、同意撤回、公開unknown、重複経済イベント、古い課金状態、異通貨、snapshot、保持期限を検査します。`scripts/test-db.sh`は10並列quotaと10並列同一requestも検査。**付属していることと、この環境で通ったことは別です。verificationを確認してください。**
+`supabase/tests/`は匿名/A/B、列権限、禁止更新、RPC否認、同意撤回、公開unknown、重複経済イベント、古い課金状態、異通貨、snapshot、保持期限、注入失敗時の原子性、アカウント削除cascade、KPIの成熟前NULLを検査します。`scripts/test-db.sh`（使い捨てPG、fresh/upgrade）は10並列quotaと10並列同一requestの結果内訳も検査し、`scripts/test-supabase-local.sh` は同じスイートを実Supabaseイメージ（実default privileges・auth schema）で実行します。2026-10-15に両方PASS（verification参照）。
+
+実Supabaseでは `service_role` は `auth.users` を読めません。RPCからauth schemaを参照しないこと（migration 06の原因）。テスト用stubに実Supabaseにない権限を足さないこと。

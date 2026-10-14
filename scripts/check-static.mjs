@@ -6,7 +6,7 @@ const read=p=>readFileSync(path.join(root,p),'utf8');
 const assert=(ok,message)=>{if(!ok)throw new Error(message);};
 const hash=p=>createHash('sha256').update(readFileSync(path.join(root,p))).digest('hex');
 const pkg=JSON.parse(read('package.json')),plugin=JSON.parse(read('.codex-plugin/plugin.json'));
-assert(pkg.version==='0.2.0'&&plugin.version===pkg.version,'Version mismatch');
+assert(/^0\.2\.\d+$/.test(pkg.version)&&plugin.version===pkg.version,'Version mismatch');
 assert(plugin.skills==='./skills/','Customer skill scope changed');
 assert(!JSON.stringify(plugin).includes('fortune-ops'),'Operator skill leaked into customer plugin');
 const mf=JSON.parse(read('supabase/migration-manifest.json'));

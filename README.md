@@ -1,10 +1,10 @@
-# Fortune Journal MCP — v0.2 Growth & Privacy
+# Fortune Journal MCP — v0.2.1 Growth & Privacy
 
 **TypeScript / Vercel / Supabase。顧客の占い手帳は顧客自身のGoogle Sheetsへ。**
 
 追加提案を、投稿運用・集客計測・任意フィードバック・課金台帳・保守に統合したソース一式です。管理ダッシュボード、Railway、独自LLM推論基盤は追加しません。
 
-> **リリース状態：ソース実装／本番未検証。** 単体・静的検証と、実DB・外部接続の検証を区別してください。実行結果は [検証記録](verification/RESULTS.md)。依存関係のインストール、正式なロックファイル、フル型チェック／Nextビルド、実PostgreSQL／Supabase、Google/MCP OAuth、Meta実機、決済審査は未完了です。既存アカウント・本番DBへの変更、投稿・課金・デプロイは行っていません。
+> **リリース状態：ローカルDeploy-Ready／Staging未作成。** lockfile・full型検査・Nextビルド・公式CLIでのmigration化・使い捨てPostgresと実SupabaseイメージでのRLS/同時実行テスト・ローカルSupabase stackでのOAuth 2.1+MCP E2Eは実行済み（[検証記録](verification/RESULTS.md)、[DoD](docs/DEFINITION_OF_DONE.md)）。Staging project作成・実Googleログイン・ChatGPT/Claude実ホスト・顧客Sheets・Meta実機・決済は未実施です。既存アカウント・本番DBへの変更、投稿・課金・デプロイは行っていません。
 
 ## 変更の要点
 
@@ -20,21 +20,18 @@
 ## 最短の引継ぎ手順
 
 1. [AGENTS.md](AGENTS.md)、[UPGRADE.md](docs/UPGRADE.md)、[DoD](docs/DEFINITION_OF_DONE.md)を読む。
-2. ネット接続されたNode 22.16+環境で、`package.json`の継承済み固定バージョンを公式情報と照合。インストール可能・互換性・セキュリティを確認して`package-lock.json`を作り、コミットする。
+2. Node 22.16+で `npm ci`（正規lockfile同梱）。
 3. **別の開発／Stagingプロジェクト**と秘密値を用意。Worksの本番を使わない。
-4. 公式Supabase CLIをインストールし、次を実行する。`db:prepare`はローカルにSQLファイルを作るだけで、DBには接続しない。
+4. Docker・公式Supabase CLI（2.120.0で検証）・psqlを用意し、次を実行する。いずれもローカルのみで、リモートDBには接続しない。
 
 ```bash
-npm run test
-supabase --version
-supabase migration new --help
-npm run db:prepare
-npm run db:check-prepared
-npm run test:db          # Docker必須。使い捨てPostgresのみ
-npm run check            # 依存インストール・ロックファイル確定後
+npm run release:check     # migration整合・unit・static・typecheck・build・使い捨てPG・audit
+supabase start            # 専用ローカルstack（554xx）
+npm run test:db:supabase  # 実SupabaseイメージでSQLスイート
+node scripts/e2e-local.mjs  # appをlocalhost:3000で起動後。OAuth 2.1/PKCE/同意/MCP/RLS
 ```
 
-`supabase/migrations`に旧ファイルしかない状態で`db push`を実行しないでください。必ず5本のテンプレートをCLIで実マイグレーション化し、チェックと使い捨てDBテストを通してから、承認済みStagingへ適用します。
+Stagingへの適用は [検証・デプロイ手順](docs/DEPLOYMENT_AND_TESTS.md) の順（`db push --dry-run` → 承認 → `db push`）。migrationは8本（旧1 + v0.2の5 + forward-fix 2）。
 
 ## 配置
 
@@ -46,8 +43,8 @@ app/api/cron/maintenance           保持期限・Insights収集。投稿は実�
 src/domain                        純粋な占術・入力検証・指標・署名
 src/integrations/threads.ts        Meta接続。書き込みの自動再試行なし
 src/lib                           DBトランザクション・運営処理
-supabase/migration-templates       5本の追加SQL（実装済み、DB未実行）
-supabase/migrations                旧履歴＋CLI生成後の追加履歴
+supabase/migration-templates       5本の追加SQLの原本（hashで生成物と対応）
+supabase/migrations                旧履歴＋CLI生成の5本＋forward-fix 06/07
 supabase/tests                    RLS・二重実行・課金・KPI・保持期限のSQLテスト
 ops/                              運営専用スキル・コマンド例・実験計画
 skills/fortune-journal             顧客用スキルのみ
