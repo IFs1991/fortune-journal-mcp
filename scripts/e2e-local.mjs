@@ -145,6 +145,12 @@ try{
   ok(JSON.stringify(names)===JSON.stringify(['calculate_numerology','draw_tarot','get_access_status','get_account_profile','get_journal_schema','report_journal_action','submit_reading_feedback']),`tools: ${names}`);
   ok(r.body.result.tools.every(t=>t._meta?.securitySchemes?.[0]?.type==='oauth2'),'securitySchemes missing');
   ok(r.body.result.tools.every(t=>t.outputSchema?.type==='object'),'outputSchema missing on a tool');
+  // 2026-07-28 era: stateless, per-request _meta envelope instead of an initialize handshake.
+  const envelope={'io.modelcontextprotocol/protocolVersion':'2026-07-28','io.modelcontextprotocol/clientInfo':{name:'fj-e2e',version:'1.0.0'},'io.modelcontextprotocol/clientCapabilities':{}};
+  const modern=await fetch(`${APP}/api/mcp`,{method:'POST',headers:{'content-type':'application/json',accept:'application/json, text/event-stream','mcp-protocol-version':'2026-07-28','mcp-method':'tools/call','mcp-name':'get_journal_schema',authorization:`Bearer ${accessA.access_token}`},
+   body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'get_journal_schema',arguments:{},_meta:envelope}})});
+  const modernText=await modern.text();
+  ok(modern.status===200&&modernText.includes('user_google_drive'),`modern-era tools/call ${modern.status}: ${modernText.slice(0,160)}`);
   const init=await mcp(accessA.access_token,'initialize',{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'fj-e2e',version:'1.0.0'}});
   ok(init.status===200&&init.body?.result?.capabilities?.tools&&init.body.result.instructions?.includes('Google Sheets'),`initialize ${init.status}`);
   ok(!names.some(n=>/publish|ops|sql|billing|grant/i.test(n)),'operator tool leaked');
