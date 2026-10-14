@@ -18,7 +18,7 @@ export default async function OAuthConsent({searchParams}:{searchParams:Promise<
       <div>Requested permissions: {details.scope || 'Account connection only'}</div>
       <div>Callback: {details.redirect_uri}</div>
     </div>
-    <p>This connector calculates fortunes and checks your account access. It does <strong>not</strong> access your Google Sheets. You can revoke this connection later.</p>
+    <p>This connector calculates fortunes and checks your account access. It does <strong>not</strong> access your Google Sheets. You can revoke this connection at any time under <em>Connected AI apps</em> on your account page.</p>
     <form method="POST" action="/api/oauth/decision" className="row">
       <input type="hidden" name="authorization_id" value={authorizationId}/>
       <button name="decision" value="approve">Allow connection</button>

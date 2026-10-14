@@ -21,7 +21,8 @@
     "db:prepare": "node scripts/prepare-migrations.mjs",
     "db:check-prepared": "node scripts/prepare-migrations.mjs --check",
     "release:check": "npm run db:check-prepared && npm run check && npm run test:db",
-    "ops": "node --experimental-strip-types scripts/ops.mjs"
+    "ops": "node --experimental-strip-types scripts/ops.mjs",
+    "test:e2e:local": "node scripts/e2e-local.mjs --out verification/e2e_local.json"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",
