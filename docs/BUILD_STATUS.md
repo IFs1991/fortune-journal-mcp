@@ -21,7 +21,7 @@ draw_tarot / get_access_status は Auth 1 + DB 1、期限切れトークンはAu
 - 実Googleログイン、ChatGPT/Claude実ホスト接続、顧客Google Sheets手動E2E、Staging advisors。
 - Meta Threads実API（権限・API版未確認）、通知先（log drain/alert）。
 - 決済事業者・署名検証・法務文書（webhookは501のまま）。
-- CIはworkflow作成・YAML検証のみ。GitHub remote未設定のため未実行。
+- CI: mainの直近runは e2e の `.ts` import（Node 22.16）でFAIL。修正はPR #1で全job PASS（未マージ）。
 
 ## 暗黙の完了扱いを禁止
 

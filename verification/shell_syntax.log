@@ -1,4 +1,1 @@
-$ bash -n scripts/test-db.sh && bash -n scripts/test-supabase-local.sh && echo ok
-# started 2026-10-14T17:05:50Z
 ok
-# exit 0

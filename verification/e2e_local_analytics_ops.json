@@ -1,12 +1,12 @@
 {
-  "ranAt": "2026-10-14T17:08:04.351Z",
+  "ranAt": "2026-10-15T06:45:08.263Z",
   "analyticsMode": true,
   "operationsMode": true,
   "target": {
     "supabase": "local CLI stack (loopback)",
     "app": "http://localhost:3000"
   },
-  "passed": 18,
+  "passed": 20,
   "failed": 0,
   "results": [
     {
@@ -23,6 +23,10 @@
     },
     {
       "name": "MCP: browser session JWT (no client_id) and garbage are 401 with discovery",
+      "result": "PASS"
+    },
+    {
+      "name": "MCP: expired and tampered OAuth tokens are 401 (local claim pre-check never authenticates on its own)",
       "result": "PASS"
     },
     {
@@ -75,6 +79,10 @@
     },
     {
       "name": "Ops API: separate HMAC, disabled by default; signed report works only when enabled",
+      "result": "PASS"
+    },
+    {
+      "name": "Concurrency and suspension: 10 parallel identical draws charge once; suspended account is refused everywhere",
       "result": "PASS"
     },
     {

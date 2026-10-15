@@ -1,7 +1,4 @@
-$ npm run typecheck
-# started 2026-10-14T17:04:55Z
 
 > fortune-journal-mcp@0.2.1 typecheck
 > tsc --noEmit
 
-# exit 0

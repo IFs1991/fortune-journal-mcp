@@ -1,0 +1,225 @@
+{
+  "label": "before-analytics-off",
+  "ranAt": "2026-10-15T06:15:59.063Z",
+  "environment": {
+    "node": "v22.22.2",
+    "os": "win32 10.0.26340",
+    "cpu": "12th Gen Intel(R) Core(TM) i7-1255U",
+    "cpus": 12,
+    "target": "local Supabase CLI stack (loopback, Docker) + next start on localhost",
+    "analytics": false
+  },
+  "method": {
+    "samples": 100,
+    "warmup": 5,
+    "sequential": true,
+    "percentile": "nearest-rank",
+    "outboundCounts": "local Kong access log lines per measured block / samples"
+  },
+  "tools": {
+    "get_account_profile": {
+      "n": 100,
+      "p50_ms": 113.17,
+      "p95_ms": 215.85,
+      "mean_ms": 128.24,
+      "min_ms": 83.75,
+      "max_ms": 269.69,
+      "auth_calls_per_call": 1,
+      "db_calls_per_call": 0,
+      "success_rate": 1,
+      "errors": {},
+      "server": {
+        "n": 100,
+        "total_p50_ms": 104.49,
+        "total_p95_ms": 208.36,
+        "auth_p50_ms": 97.86,
+        "auth_p95_ms": 201.04,
+        "db_p50_ms": 0,
+        "db_p95_ms": 0,
+        "calculation_p50_ms": 0,
+        "calculation_p95_ms": 0,
+        "outbound_auth_calls": 1,
+        "outbound_db_calls": 0
+      }
+    },
+    "get_access_status": {
+      "n": 100,
+      "p50_ms": 130.02,
+      "p95_ms": 222.86,
+      "mean_ms": 141.47,
+      "min_ms": 96.92,
+      "max_ms": 290.86,
+      "auth_calls_per_call": 1,
+      "db_calls_per_call": 2,
+      "success_rate": 1,
+      "errors": {},
+      "server": {
+        "n": 100,
+        "total_p50_ms": 123.77,
+        "total_p95_ms": 214.89,
+        "auth_p50_ms": 100.68,
+        "auth_p95_ms": 193.94,
+        "db_p50_ms": 13.49,
+        "db_p95_ms": 29.18,
+        "calculation_p50_ms": 0,
+        "calculation_p95_ms": 0,
+        "outbound_auth_calls": 1,
+        "outbound_db_calls": 2
+      }
+    },
+    "get_journal_schema": {
+      "n": 100,
+      "p50_ms": 112.38,
+      "p95_ms": 226.75,
+      "mean_ms": 129.93,
+      "min_ms": 81.72,
+      "max_ms": 425.11,
+      "auth_calls_per_call": 1,
+      "db_calls_per_call": 0,
+      "success_rate": 1,
+      "errors": {},
+      "server": {
+        "n": 100,
+        "total_p50_ms": 104.66,
+        "total_p95_ms": 218.29,
+        "auth_p50_ms": 99.29,
+        "auth_p95_ms": 211.76,
+        "db_p50_ms": 0,
+        "db_p95_ms": 0,
+        "calculation_p50_ms": 0,
+        "calculation_p95_ms": 0,
+        "outbound_auth_calls": 1,
+        "outbound_db_calls": 0
+      }
+    },
+    "calculate_numerology": {
+      "n": 100,
+      "p50_ms": 127.94,
+      "p95_ms": 198.95,
+      "mean_ms": 137.42,
+      "min_ms": 95.77,
+      "max_ms": 311.58,
+      "auth_calls_per_call": 1,
+      "db_calls_per_call": 1,
+      "success_rate": 1,
+      "errors": {},
+      "server": {
+        "n": 100,
+        "total_p50_ms": 120.96,
+        "total_p95_ms": 192.66,
+        "auth_p50_ms": 102.18,
+        "auth_p95_ms": 170.85,
+        "db_p50_ms": 11.46,
+        "db_p95_ms": 19.3,
+        "calculation_p50_ms": 0.03,
+        "calculation_p95_ms": 0.05,
+        "outbound_auth_calls": 1,
+        "outbound_db_calls": 1
+      }
+    },
+    "draw_tarot": {
+      "n": 100,
+      "p50_ms": 138.68,
+      "p95_ms": 203.68,
+      "mean_ms": 146.38,
+      "min_ms": 100.6,
+      "max_ms": 300.86,
+      "auth_calls_per_call": 1,
+      "db_calls_per_call": 2,
+      "success_rate": 1,
+      "errors": {},
+      "server": {
+        "n": 100,
+        "total_p50_ms": 131.32,
+        "total_p95_ms": 197.54,
+        "auth_p50_ms": 105.25,
+        "auth_p95_ms": 160.62,
+        "db_p50_ms": 17.04,
+        "db_p95_ms": 31.24,
+        "calculation_p50_ms": 0.16,
+        "calculation_p95_ms": 0.3,
+        "outbound_auth_calls": 1,
+        "outbound_db_calls": 2
+      }
+    },
+    "draw_tarot(replay)": {
+      "n": 100,
+      "p50_ms": 146.85,
+      "p95_ms": 233.86,
+      "mean_ms": 158.43,
+      "min_ms": 103.06,
+      "max_ms": 409.79,
+      "auth_calls_per_call": 1,
+      "db_calls_per_call": 2,
+      "success_rate": 1,
+      "errors": {},
+      "server": {
+        "n": 100,
+        "total_p50_ms": 139.57,
+        "total_p95_ms": 226.39,
+        "auth_p50_ms": 113.93,
+        "auth_p95_ms": 197.86,
+        "db_p50_ms": 17.83,
+        "db_p95_ms": 25.97,
+        "calculation_p50_ms": 0.16,
+        "calculation_p95_ms": 0.28,
+        "outbound_auth_calls": 1,
+        "outbound_db_calls": 2
+      }
+    },
+    "submit_reading_feedback": {
+      "n": 100,
+      "p50_ms": 114.23,
+      "p95_ms": 286.95,
+      "mean_ms": 140.22,
+      "min_ms": 82.85,
+      "max_ms": 413.62,
+      "auth_calls_per_call": 1,
+      "db_calls_per_call": 0,
+      "success_rate": 0,
+      "errors": {
+        "OPTIONAL_ANALYTICS_DISABLED": 100
+      },
+      "server": {
+        "n": 100,
+        "total_p50_ms": 106.09,
+        "total_p95_ms": 280.61,
+        "auth_p50_ms": 101.07,
+        "auth_p95_ms": 275.15,
+        "db_p50_ms": 0,
+        "db_p95_ms": 0,
+        "calculation_p50_ms": 0,
+        "calculation_p95_ms": 0,
+        "outbound_auth_calls": 1,
+        "outbound_db_calls": 0
+      }
+    },
+    "report_journal_action": {
+      "n": 100,
+      "p50_ms": 116.3,
+      "p95_ms": 202.81,
+      "mean_ms": 128.05,
+      "min_ms": 84.48,
+      "max_ms": 334.45,
+      "auth_calls_per_call": 1,
+      "db_calls_per_call": 0,
+      "success_rate": 0,
+      "errors": {
+        "OPTIONAL_ANALYTICS_DISABLED": 100
+      },
+      "server": {
+        "n": 100,
+        "total_p50_ms": 108.43,
+        "total_p95_ms": 196.01,
+        "auth_p50_ms": 103.29,
+        "auth_p95_ms": 189.84,
+        "db_p50_ms": 0,
+        "db_p95_ms": 0,
+        "calculation_p50_ms": 0,
+        "calculation_p95_ms": 0,
+        "outbound_auth_calls": 1,
+        "outbound_db_calls": 0
+      }
+    }
+  }
+}

@@ -1,8 +1,5 @@
-$ npm run check:static
-# started 2026-10-14T17:04:48Z
 
 > fortune-journal-mcp@0.2.1 check:static
 > node scripts/check-static.mjs
 
-PASS: static contracts (11 tables, 5 additive SQL stages + 2 forward fix(es), 7 MCP tools). This does NOT execute SQL, typecheck dependencies, build, or exercise real providers.
-# exit 0
+PASS: static contracts (11 tables, 5 additive SQL stages + 3 forward fix(es), 7 MCP tools). This does NOT execute SQL, typecheck dependencies, build, or exercise real providers.

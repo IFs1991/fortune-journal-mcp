@@ -1,11 +1,9 @@
-$ rm -rf 'C:/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/9a355fc9-2bcb-43c4-b426-39441b23783b/scratchpad/clean' && git clone -q . 'C:/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/9a355fc9-2bcb-43c4-b426-39441b23783b/scratchpad/clean' && cd 'C:/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/9a355fc9-2bcb-43c4-b426-39441b23783b/scratchpad/clean' && git log --oneline -1 && npm ci --no-fund && npm test 2>&1 | grep -E '^# (pass|fail)' && npm run typecheck && npm run db:check-prepared
-# started 2026-10-14T17:03:28Z
-64de536 docs: DoD with PASS/FAIL/BLOCKED/NOT RUN, AGENTS/CLAUDE/BUILD_STATUS/UPGRADE/SECURITY/CHANGELOG/README for v0.2.1
+f522827 docs: performance report, auth decision, migration 08 deploy order
 
-added 44 packages, and audited 45 packages in 57s
+added 44 packages, and audited 45 packages in 1m
 
 found 0 vulnerabilities
-# pass 39
+# pass 46
 # fail 0
 
 > fortune-journal-mcp@0.2.1 typecheck
@@ -16,4 +14,3 @@ found 0 vulnerabilities
 > node scripts/prepare-migrations.mjs --check
 
 Prepared 5 additive migrations via official CLI. No remote database was changed.
-# exit 0
