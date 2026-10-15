@@ -31,7 +31,7 @@ for mode in fresh upgrade; do
  sql -f "/repo/supabase/migrations/${migrations[0]}"
  if [[ "$mode" == upgrade ]];then sql -f /repo/supabase/tests/v01_upgrade_seed.sql;fi
  for file in "${migrations[@]:1}";do sql -f "/repo/supabase/migrations/$file";done
- for test in rls_security v02_security v02_transactions v02_billing v02_retention_kpis v02_negative_edge v02_forward_fix_06;do sql -f "/repo/supabase/tests/$test.sql";done
+ for test in rls_security v02_security v02_transactions v02_billing v02_retention_kpis v02_negative_edge v02_forward_fix_06 v02_forward_fix_08;do sql -f "/repo/supabase/tests/$test.sql";done
  # Concurrent different requests cannot exceed the Free weekly quota of three.
  sql <<'SQL'
 INSERT INTO auth.users(id) VALUES('33333333-3333-4333-8333-333333333333'),('44444444-4444-4444-8444-444444444444');

@@ -83,7 +83,15 @@ const report={label:LABEL,ranAt:new Date().toISOString(),
  method:{samples:SAMPLES,warmup:WARMUP,sequential:true,percentile:'nearest-rank',outboundCounts:'local Kong access log lines per measured block / samples'},tools:{}};
 try{
  const token=await connect(user);
- // Starts the trial (first calculation) so draw_tarot is allowed, then measure every customer tool.
+ // Local-only fixture: a verified Premium subscription (200/day) so large samples never hit the 100/day trial quota.
+ const {error:fixture}=await admin.from('subscriptions').insert({user_id:user.id,provider:'bench_local',provider_customer_id:'bench',provider_subscription_id:`bench-${randomUUID()}`,
+  status:'active',current_period_end:new Date(Date.now()+864e5).toISOString(),verified_at:new Date().toISOString()});
+ ok(!fixture,'premium fixture');
+ if(report.environment.analytics){ // Explicit web opt-in, as a consenting user would, so optional telemetry paths run.
+  const r=await fetch(`${APP}/api/account/preferences`,{method:'POST',redirect:'manual',headers:{cookie:await cookieHeader(user.session),origin:APP,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({analytics:'yes'})});
+  ok(r.status===303,`analytics opt-in ${r.status}`);
+ }
+ // One calculation and one tarot draw seed the ledger (feedback target, replay), then measure every customer tool.
  ok(!(await call(token,'calculate_numerology',{birthDate:'1991-09-12',asOf:'2026-10-15',requestId:randomUUID()})).error,'trial start');
  const replayId=randomUUID();ok(!(await call(token,'draw_tarot',{count:3,drawId:replayId})).error,'replay seed');
  const {data:seed}=await admin.from('user_readings').select('id').eq('user_id',user.id).limit(1).single();
