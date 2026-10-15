@@ -66,7 +66,7 @@ MCP/OAuth適合性: 401 + RFC 9728 `resource_metadata`、PRM、issuer束縛、cl
 `20261015062212_fj_v02_08_single_roundtrip_mcp.sql`（CLI生成、manifest登録）:
 
 - `fj_record_calculation`（同じ引数で置換）: 既存readingの照合をtier判定より前に行う。tarotは日付に依存しないため、同一drawId・同一入力の再試行は送られた日付に関係なく元の行をreplay（元の日付は書き換えない）。numerologyは従来どおり日付不一致を `IDEMPOTENCY_CONFLICT`。
-  - 挙動の変更点は1つ: **Trial終了後の同一再試行**は、従来 `FEATURE_NOT_INCLUDED` だったが、配布済みの結果をreplayする（利用回数を消費しない・新しい抽選はしない）。停止アカウントは従来どおり先に拒否、Freeの新規tarotは従来どおり拒否。
+  - 挙動の変更点は1つ: **Trial終了後の同一再試行**は、従来 `FEATURE_NOT_INCLUDED` だったが、配布済みの結果をreplayする（利用回数を消費しない・新しい抽選はしない）。停止アカウントは従来どおり先に拒否、Freeの新規tarotは従来どおり拒否。**この仕様変更はオーナーが2026-10-15に承認（PR #1）。**
 - `fj_access_snapshot(uuid)`: STABLE / SECURITY INVOKER / `search_path=''` / service_role のみEXECUTE。返すのは従来2クエリで読んでいた列（trial_ends_at, suspended_at, status, current_period_end, verified_at）だけで、課金ID・金額は返さない。形が想定外ならTS側で失敗扱い（fail closed）。
 - **適用順**: 08 → アプリ。08適用後の旧アプリはそのまま動く。逆順は不可（UPGRADE.md）。
 

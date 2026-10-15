@@ -62,7 +62,7 @@
 | MCP完了をSheets保存成功と表示しない、feedback明示選択、計測拒否でも基本機能 | PASS | E2E + tool記述 |
 | 通信: draw_tarot / get_access_status は Auth 1 + DB 1、calculate_numerology は増加なし、期限切れ401はAuth 0 | PASS（local） | Kong実測 `verification/perf/`、[PERFORMANCE.md](PERFORMANCE.md) |
 | 認証の失効即時性を維持（毎回 getUser、ローカル検証のみの受理なし） | PASS（local） | E2E revoke/削除後401、`perf/auth_probe.json` |
-| Trial終了後の同一tarot再試行・停止ユーザー拒否・MCP経由10並列で1単位 | PASS（local） | E2E + `v02_forward_fix_08.sql` + `db.log` |
+| Trial終了後の同一tarot再試行・停止ユーザー拒否・MCP経由10並列で1単位 | PASS（local） | E2E + `v02_forward_fix_08.sql` + `db.log`。Trial終了後replayの仕様はオーナー承認済み（2026-10-15） |
 | ホストが事前ツール呼出しを省くか（ChatGPT/Claude/Codex） | BLOCKED | 実ホスト接続にStaging公開URLが必要 |
 | Vercel/実Supabase上の往復時間・コールドスタート | BLOCKED | Staging未作成 |
 
