@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {sha256} from '@/src/domain/security';
+import { after } from 'next/server';
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { z } from 'zod';
 import { calculateNumerology, parseISODate } from '@/src/domain/numerology';
@@ -26,7 +27,7 @@ const stateful = {readOnlyHint:false, destructiveHint:false, openWorldHint:false
 const handler = createMcpHandler((server) => {
   server.registerTool('get_account_profile', {
     title: 'Get Connected Account',
-    description: 'Return a stable, non-sensitive account ID for the authenticated Fortune Journal user. Does not expose email or journal contents.',
+    description: 'Return a stable, non-sensitive account ID for the authenticated Fortune Journal user. Does not expose email or journal contents. Call only when the user asks which account is connected; it is not needed before a reading.',
     inputSchema: z.object({}),
     outputSchema: z.object({id:z.string(),name:z.string()}),
     annotations: stateful,
@@ -34,13 +35,18 @@ const handler = createMcpHandler((server) => {
   }, timedTool('get_account_profile', async (_args,ctx) => {
     const id = getAuthenticatedUserId(ctx);
     if (!id) return toolError('AUTHENTICATION_REQUIRED');
-    try { await recordConnection(id,ctx.http?.authInfo?.clientId); } catch { console.warn('FJ_CONNECTION_TELEMETRY_UNAVAILABLE'); }
+    const clientId=ctx.http?.authInfo?.clientId;
+    // Optional connection telemetry runs after the response (next/server after()), so it never delays the user.
+    // fj_record_funnel still checks consent when it runs and dedupes by key, so the event and its KPI are unchanged.
+    after(async () => {
+      try { await recordConnection(id,clientId); } catch { console.warn('FJ_CONNECTION_TELEMETRY_UNAVAILABLE'); }
+    });
     return result({id, name:'Fortune Journal'});
   }));
 
   server.registerTool('get_access_status', {
     title: 'Check Access',
-    description: 'Check which Fortune Journal features are available under the current account; does not start a purchase or provide a checkout link.',
+    description: 'Check which Fortune Journal features are available under the current account; does not start a purchase or provide a checkout link. Call only when the user asks about their plan or access. Not needed before calculate_numerology or draw_tarot: they check access themselves and return tier and remainingAtCompletion, or FEATURE_NOT_INCLUDED / USAGE_LIMIT_REACHED / ACCOUNT_SUSPENDED.',
     inputSchema: z.object({}),
     outputSchema: z.object({tier:z.enum(['free','trial','premium','suspended'])}),
     annotations: readOnly, _meta: oauth,
@@ -70,7 +76,7 @@ const handler = createMcpHandler((server) => {
 
   server.registerTool('calculate_numerology', {
     title: 'Calculate Personal Numerology',
-    description: 'Calculate the life-path, personal-year and personal-month numbers from a birth date using the documented deterministic fj-numerology-v1 convention. Free tier has a weekly quota. The birth date is only processed for this request and is never saved by Fortune Journal. Entertainment and reflection only; not a prediction.',
+    description: 'Calculate the life-path, personal-year and personal-month numbers from a birth date using the documented deterministic fj-numerology-v1 convention. Free tier has a weekly quota. Call it directly; no prior account or access check is needed (the result includes tier and remainingAtCompletion). The birth date is only processed for this request and is never saved by Fortune Journal. Entertainment and reflection only; not a prediction.',
     inputSchema: z.object({
       requestId:z.string().uuid().optional().describe('Reuse this operation ID with identical inputs for a retry. A new ID requests a new calculation.'),
       topic:z.enum(['love','work','money','general']).optional().describe('User-chosen category only. Stored only if separately opted in; never infer private concerns.'),
@@ -94,7 +100,7 @@ const handler = createMcpHandler((server) => {
 
   server.registerTool('draw_tarot', {
     title: 'Draw Symbolic Tarot Cards',
-    description: 'Premium or trial: draw one or three symbolic Major Arcana cards. Repeating the same drawId and account produces the same result; a new draw generates a new ID. Identical retries with the same drawId do not consume another usage unit within the 90-day deduplication window. No question text or reading contents are stored; minimal operational metadata is retained. Entertainment only.',
+    description: 'Premium or trial: draw one or three symbolic Major Arcana cards. Call it directly; no prior account or access check is needed (Free accounts get FEATURE_NOT_INCLUDED; the result includes tier and remainingAtCompletion). Repeating the same drawId and account produces the same result; a new draw generates a new ID. Identical retries with the same drawId do not consume another usage unit within the 90-day deduplication window. No question text or reading contents are stored; minimal operational metadata is retained. Entertainment only.',
     inputSchema: z.object({
       topic:z.enum(['love','work','money','general']).optional(),
       count:z.union([z.literal(1),z.literal(3)]).default(1),
@@ -143,7 +149,7 @@ const handler = createMcpHandler((server) => {
   }));
 
 }, {
-  instructions: 'Fortune Journal supplies deterministic entertainment-oriented fortune calculations. Do not present fortunes as factual predictions. For records, use the user\'s own connected Google Sheets application, and only when requested/authorized; this MCP server never reads or writes Google. Do not infer optional analytics consent; only use feedback/report tools after an explicit user request and prior web consent. Keep fortune results, life events, and retrospective interpretation separate; never edit an original reading to match later events. Do not advertise purchases or include checkout links in tool output.',
+  instructions: 'Fortune Journal supplies deterministic entertainment-oriented fortune calculations. Do not present fortunes as factual predictions. For records, use the user\'s own connected Google Sheets application, and only when requested/authorized; this MCP server never reads or writes Google. Do not infer optional analytics consent; only use feedback/report tools after an explicit user request and prior web consent. For a reading, call calculate_numerology or draw_tarot directly; they enforce access and report tier and remaining usage, so get_account_profile and get_access_status are only for when the user asks about their account or plan. Keep fortune results, life events, and retrospective interpretation separate; never edit an original reading to match later events. Do not advertise purchases or include checkout links in tool output.',
 });
 
 // resourceUrl is pinned to APP_ORIGIN so WWW-Authenticate discovery never trusts forwarded Host headers.
