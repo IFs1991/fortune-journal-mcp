@@ -5,7 +5,7 @@
 // Usage: supabase start; build+start the app with APP_ORIGIN=http://localhost:3000 and the local keys; then
 //   node --experimental-strip-types scripts/e2e-local.mjs [--out verification/e2e_local.json]
 import {spawnSync} from 'node:child_process';
-import {createHash,randomBytes,randomUUID} from 'node:crypto';
+import {createHash,createHmac,randomBytes,randomUUID} from 'node:crypto';
 import {writeFileSync} from 'node:fs';
 import {createClient} from '@supabase/supabase-js';
 import {createServerClient} from '@supabase/ssr';
@@ -107,7 +107,7 @@ try{
   ok((await c.rpc('fj_record_calculation',{p_user_id:A.id,p_request_id:randomUUID(),p_fingerprint:'a'.repeat(64),p_feature:'calculate_numerology',p_algorithm:'x',p_target_date:'2026-10-15'})).error,'anon RPC');
  });
 
- let accessA;
+ let accessA,trialDraw;
  await step('OAuth: DCR client + PKCE + consent page shows client and callback',async()=>{
   const clientId=await registerClient('FJ E2E Client');const {verifier,challenge}=pkce();const state=randomUUID();
   const authorizationId=await startAuthorization(clientId,challenge,state);
@@ -140,6 +140,21 @@ try{
   ok(prm.resource===`${APP}/api/mcp`&&prm.authorization_servers?.[0]===`${API}/auth/v1`,'protected resource metadata wrong');
  });
 
+ await step('MCP: expired and tampered OAuth tokens are 401 (local claim pre-check never authenticates on its own)',async()=>{
+  const [h,p,sig]=accessA.access_token.split('.');const claims=decode(accessA.access_token);
+  const enc=o=>Buffer.from(JSON.stringify(o)).toString('base64url');
+  // Payload edited (later exp) but signature kept: passes the claim pre-check, must fail Supabase Auth.
+  ok((await mcp(`${h}.${enc({...claims,exp:claims.exp+3600})}.${sig}`,'tools/list')).status===401,'tampered token accepted');
+  // Correctly signed but expired (local HS256 stack only): rejected before any Auth call.
+  const header=JSON.parse(Buffer.from(h,'base64url').toString());
+  if(header.alg==='HS256'&&status.JWT_SECRET){
+   const body=`${enc(header)}.${enc({...claims,exp:Math.floor(Date.now()/1000)-60})}`;
+   const expired=`${body}.${createHmac('sha256',status.JWT_SECRET).update(body).digest('base64url')}`;
+   ok((await mcp(expired,'tools/list')).status===401,'expired token accepted');
+  }else console.log('NOTE expired-token signing skipped: stack does not use the local HS256 secret');
+  ok((await mcp(accessA.access_token,'tools/list')).status===200,'original token broken');
+ });
+
  await step('MCP: tools/list exposes exactly the 7 customer tools with OAuth security metadata',async()=>{
   const r=await mcp(accessA.access_token,'tools/list');ok(r.status===200,`tools/list ${r.status}`);
   const names=r.body.result.tools.map(t=>t.name).sort();
@@ -169,7 +184,7 @@ try{
   ok(counters.reduce((s,c)=>s+c.used_count,0)===1,'retry consumed quota twice');
   const {data:ledger}=await admin.from('user_readings').select('*').eq('user_id',A.id);
   ok(ledger.length===1&&!JSON.stringify(ledger).includes('1991-09-12'),'birth date persisted or ledger wrong');
-  const drawId=randomUUID();const t1=await tool(accessA.access_token,'draw_tarot',{count:3,drawId});const t2=await tool(accessA.access_token,'draw_tarot',{count:3,drawId});
+  const drawId=randomUUID();trialDraw={drawId};const t1=await tool(accessA.access_token,'draw_tarot',{count:3,drawId});trialDraw.cards=t1.cards;const t2=await tool(accessA.access_token,'draw_tarot',{count:3,drawId});
   ok(t1.cards?.length===3&&JSON.stringify(t1.cards)===JSON.stringify(t2.cards)&&t2.replayed===true,'tarot draw not reproducible/idempotent');
  });
 
@@ -189,6 +204,11 @@ try{
   await admin.from('usage_counters').delete().eq('user_id',A.id);
   ok((await tool(accessA.access_token,'get_access_status')).tier==='free','expired trial not free');
   ok((await tool(accessA.access_token,'draw_tarot',{count:1})).error==='FEATURE_NOT_INCLUDED','free user drew tarot');
+  // An identical retry of a draw made during the trial replays it (same cards, no usage) instead of failing.
+  const replay=await tool(accessA.access_token,'draw_tarot',{count:3,drawId:trialDraw.drawId});
+  ok(replay.replayed===true&&replay.tier==='free'&&JSON.stringify(replay.cards)===JSON.stringify(trialDraw.cards),`post-trial retry ${JSON.stringify(replay)}`);
+  ok((await tool(accessA.access_token,'draw_tarot',{count:1,drawId:trialDraw.drawId})).error==='IDEMPOTENCY_CONFLICT','post-trial retry with a different count accepted');
+  const {data:afterReplay}=await admin.from('usage_counters').select('used_count').eq('user_id',A.id);ok(afterReplay.length===0,'post-trial replay consumed usage');
   const remaining=[];for(let i=0;i<3;i++)remaining.push((await tool(accessA.access_token,'calculate_numerology',{birthDate:'1991-09-12',asOf:'2026-10-15'})).remainingAtCompletion);
   ok(JSON.stringify(remaining)==='[2,1,0]',`remaining ${remaining}`);
   ok((await tool(accessA.access_token,'calculate_numerology',{birthDate:'1991-09-12',asOf:'2026-10-15'})).error==='USAGE_LIMIT_REACHED','4th free calc allowed');
@@ -207,7 +227,15 @@ try{
  if(ANALYTICS)await step('Analytics mode: separate consents, topic only with interest consent, feedback/report, withdrawal deletes optional data',async()=>{
   // B signed up seconds ago: a near-signup opt-in enters the signup cohort with self-reported source (migration 06 path).
   const conn=await connect(B,'FJ E2E Analytics');
+  ok((await tool(conn.access_token,'get_account_profile')).id===B.id,'profile before consent');
+  await new Promise(r=>setTimeout(r,1000));
+  ok(!(await admin.from('funnel_events').select('id').eq('user_id',B.id)).data.length,'connection telemetry recorded without consent');
   ok((await preferences(B,{analytics:'yes',source:'threads'})).status===303,'opt-in failed');
+  ok((await tool(conn.access_token,'get_account_profile')).id===B.id,'profile after consent');
+  let connected=[];for(let i=0;i<20&&!connected.length;i++){await new Promise(r=>setTimeout(r,250));({data:connected}=await admin.from('funnel_events').select('id').eq('user_id',B.id).eq('event_name','mcp_connected'));}
+  ok(connected.length===1,'deferred mcp_connected event not recorded after the response');
+  await tool(conn.access_token,'get_account_profile');await new Promise(r=>setTimeout(r,1000));
+  ok((await admin.from('funnel_events').select('id').eq('user_id',B.id).eq('event_name','mcp_connected')).data.length===1,'repeat connection duplicated the event');
   const {data:acc}=await admin.from('user_access').select('analytics_consent_at,interest_consent_at').eq('user_id',B.id).single();
   ok(acc.analytics_consent_at&&!acc.interest_consent_at,'interest consent inferred from analytics consent');
   const {data:reg}=await admin.from('funnel_events').select('source_channel,source_evidence').eq('user_id',B.id).eq('event_name','registration');
@@ -302,6 +330,22 @@ try{
   ok((await send(body,sig,String(Number(ts)-600))).status===401,'stale timestamp accepted');
   const r=await send(body,sig,ts);const out=await r.json();
   ok(r.status===200&&Array.isArray(out.caveats)&&out.cohorts?.population==='consented_near_signup_accounts_only',`signed report ${r.status} ${JSON.stringify(out).slice(0,160)}`);
+ });
+
+ await step('Concurrency and suspension: 10 parallel identical draws charge once; suspended account is refused everywhere',async()=>{
+  const D=await newUser('d');created.push(D.id);const conn=await connect(D,'FJ E2E Concurrency');
+  ok((await tool(conn.access_token,'calculate_numerology',{birthDate:'1991-09-12',asOf:'2026-10-15'})).tier==='trial','trial not started');
+  const drawId=randomUUID();
+  const draws=await Promise.all(Array.from({length:10},()=>tool(conn.access_token,'draw_tarot',{count:3,drawId})));
+  ok(draws.every(d=>!d.error&&d.readingId===draws[0].readingId&&JSON.stringify(d.cards)===JSON.stringify(draws[0].cards)),'parallel draws diverged');
+  ok(draws.filter(d=>d.replayed===false).length===1,`fresh draws ${draws.filter(d=>d.replayed===false).length}`);
+  const {data:c}=await admin.from('usage_counters').select('used_count').eq('user_id',D.id).eq('feature_key','draw_tarot');
+  ok(c.reduce((n,x)=>n+x.used_count,0)===1,'parallel identical draws consumed more than one unit');
+  ok((await tool(conn.access_token,'get_access_status')).tier==='trial','access status');
+  ok(!(await admin.from('user_access').update({suspended_at:new Date().toISOString()}).eq('user_id',D.id)).error,'fixture update');
+  ok((await tool(conn.access_token,'get_access_status')).tier==='suspended','suspension not reported');
+  ok((await tool(conn.access_token,'draw_tarot',{count:3,drawId})).error==='ACCOUNT_SUSPENDED','suspended replay allowed');
+  ok((await tool(conn.access_token,'calculate_numerology',{birthDate:'1991-09-12',asOf:'2026-10-15'})).error==='ACCOUNT_SUSPENDED','suspended calculation allowed');
  });
 
  await step('Account deletion: confirmation + Origin required; afterwards OAuth tokens are rejected',async()=>{
