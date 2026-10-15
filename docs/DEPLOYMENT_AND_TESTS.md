@@ -24,8 +24,8 @@ E2E（ローカルstackのGoTrue OAuth 2.1 + PostgREST + このapp）:
 ```bash
 # 使い捨て秘密を生成して env に入れ（ファイルはリポジトリ外）、APP_ORIGIN=http://localhost:3000 で build/start
 npm run build && npx next start -p 3000
-PRODUCT_ANALYTICS_ENABLED=false OPERATIONS_ENABLED=false node scripts/e2e-local.mjs   # 15 checks
-PRODUCT_ANALYTICS_ENABLED=true  OPERATIONS_ENABLED=true  node scripts/e2e-local.mjs   # 16 checks（appも同flagで起動）
+PRODUCT_ANALYTICS_ENABLED=false OPERATIONS_ENABLED=false node --experimental-strip-types scripts/e2e-local.mjs   # 15 checks
+PRODUCT_ANALYTICS_ENABLED=true  OPERATIONS_ENABLED=true node --experimental-strip-types scripts/e2e-local.mjs   # 16 checks（appも同flagで起動）
 ```
 
 E2Eスクリプトはloopback以外を拒否し、トークン/鍵を表示しない。テストユーザーはAdmin APIで作成し、終了時に削除する。

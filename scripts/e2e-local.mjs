@@ -3,7 +3,7 @@
 // own routes, the MCP endpoint with real OAuth access tokens, quota/trial rules, refresh, grant revocation,
 // deny, and account deletion. Refuses any non-loopback target. Prints no tokens or keys.
 // Usage: supabase start; build+start the app with APP_ORIGIN=http://localhost:3000 and the local keys; then
-//   node scripts/e2e-local.mjs [--out verification/e2e_local.json]
+//   node --experimental-strip-types scripts/e2e-local.mjs [--out verification/e2e_local.json]
 import {spawnSync} from 'node:child_process';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {writeFileSync} from 'node:fs';
