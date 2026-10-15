@@ -1,8 +1,5 @@
-$ npm run check:syntax
-# started 2026-10-14T17:04:50Z
 
 > fortune-journal-mcp@0.2.1 check:syntax
 > node scripts/check-syntax.mjs
 
-Syntax-only check PASS (42 TS/TSX files); not full dependency type checking.
-# exit 0
+Syntax-only check PASS (43 TS/TSX files); not full dependency type checking.

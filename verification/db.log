@@ -1,5 +1,3 @@
-$ bash scripts/test-db.sh
-# started 2026-10-14T17:05:52Z
 DO
 CREATE SCHEMA
 CREATE TABLE
@@ -134,6 +132,12 @@ CREATE INDEX
 CREATE INDEX
 CREATE INDEX
 COMMIT
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+GRANT
+COMMIT
 DO
 BEGIN
 INSERT 0 2
@@ -145,12 +149,12 @@ SET
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "a52d6915-6b4e-40c1-9247-9f76ff27b209", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "0caa3cf8-d4e6-456f-ad99-1e8b61b03ef5", "remainingAtCompletion": 99}
 (1 row)
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "dee55a2b-fe69-41fb-83ac-b17e691d0b49", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "09901a6f-8858-424f-bb46-748fc0dc6f29", "remainingAtCompletion": 99}
 (1 row)
 
 RESET
@@ -209,12 +213,12 @@ SET
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "762a10de-2eba-485c-bdfa-90dacbf0d6bb", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "b631e767-75c6-4449-b919-45bf28768722", "remainingAtCompletion": 99}
 (1 row)
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "8fee5743-b792-4787-be2a-098eca5ff4fa", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "d83337f7-0066-47b5-bd28-c67129765de9", "remainingAtCompletion": 99}
 (1 row)
 
 INSERT 0 1
@@ -263,7 +267,18 @@ SET
 DO
 RESET
 ROLLBACK
-INSERT 0 2
+BEGIN
+INSERT 0 3
+DO
+SET
+DO
+DO
+RESET
+SET
+DO
+RESET
+ROLLBACK
+INSERT 0 3
 INSERT 0 1
 DO
 PASS: fresh PostgreSQL migration/RLS/transaction/concurrency tests (Auth stub only)
@@ -405,6 +420,12 @@ CREATE INDEX
 CREATE INDEX
 CREATE INDEX
 COMMIT
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+GRANT
+COMMIT
 DO
 BEGIN
 INSERT 0 2
@@ -416,12 +437,12 @@ SET
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "5861b3c2-9267-4cda-b3dc-84d06104672a", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "fdf4f58e-c57c-47b4-982b-ca28a335db6f", "remainingAtCompletion": 99}
 (1 row)
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "bbea7d2c-6d28-4a62-b2d2-462737d103eb", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "60bced16-59a4-41ca-9ce1-aab66cca2cae", "remainingAtCompletion": 99}
 (1 row)
 
 RESET
@@ -480,12 +501,12 @@ SET
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "3f5d0f0f-c1f1-416f-abcb-2fc4d0137c17", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "be5bbe92-99c3-47eb-b18e-2c7260d44efe", "remainingAtCompletion": 99}
 (1 row)
 
                                                        fj_record_calculation                                                        
 ------------------------------------------------------------------------------------------------------------------------------------
- {"ok": true, "tier": "trial", "replayed": false, "readingId": "940c64a5-a15e-4412-ae37-13acfaf5c21e", "remainingAtCompletion": 99}
+ {"ok": true, "tier": "trial", "replayed": false, "readingId": "83d871d1-d315-44fa-a45c-13a413703319", "remainingAtCompletion": 99}
 (1 row)
 
 INSERT 0 1
@@ -534,9 +555,19 @@ SET
 DO
 RESET
 ROLLBACK
-INSERT 0 2
+BEGIN
+INSERT 0 3
+DO
+SET
+DO
+DO
+RESET
+SET
+DO
+RESET
+ROLLBACK
+INSERT 0 3
 INSERT 0 1
 DO
 DO
 PASS: upgrade PostgreSQL migration/RLS/transaction/concurrency tests (Auth stub only)
-# exit 0

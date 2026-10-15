@@ -31,10 +31,10 @@ for mode in fresh upgrade; do
  sql -f "/repo/supabase/migrations/${migrations[0]}"
  if [[ "$mode" == upgrade ]];then sql -f /repo/supabase/tests/v01_upgrade_seed.sql;fi
  for file in "${migrations[@]:1}";do sql -f "/repo/supabase/migrations/$file";done
- for test in rls_security v02_security v02_transactions v02_billing v02_retention_kpis v02_negative_edge v02_forward_fix_06;do sql -f "/repo/supabase/tests/$test.sql";done
+ for test in rls_security v02_security v02_transactions v02_billing v02_retention_kpis v02_negative_edge v02_forward_fix_06 v02_forward_fix_08;do sql -f "/repo/supabase/tests/$test.sql";done
  # Concurrent different requests cannot exceed the Free weekly quota of three.
  sql <<'SQL'
-INSERT INTO auth.users(id) VALUES('33333333-3333-4333-8333-333333333333'),('44444444-4444-4444-8444-444444444444');
+INSERT INTO auth.users(id) VALUES('33333333-3333-4333-8333-333333333333'),('44444444-4444-4444-8444-444444444444'),('55555555-5555-4555-8555-555555555555');
 INSERT INTO public.user_access(user_id,trial_started_at,trial_ends_at) VALUES('33333333-3333-4333-8333-333333333333',now()-interval '20 days',now()-interval '6 days');
 SQL
  pids=()
@@ -49,6 +49,17 @@ SQL
   sql -qAt -c "SET ROLE service_role; SELECT public.fj_record_calculation('44444444-4444-4444-8444-444444444444','dddddddd-dddd-4ddd-8ddd-dddddddddddd',repeat('d',64),'calculate_numerology','test-v1',current_date);" >"$out/same-$n" & pids+=("$!")
  done
  for pid in "${pids[@]}";do wait "$pid";done
+ # Concurrent identical tarot retries spanning two request dates (migration 08 replay path): one unit, one reading.
+ pids=()
+ for n in $(seq 1 10);do
+  day=$(( n % 2 ))
+  sql -qAt -c "SET ROLE service_role; SELECT public.fj_record_calculation('55555555-5555-4555-8555-555555555555','eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',repeat('e',64),'draw_tarot','test-v1',current_date+$day);" >"$out/tarot-$n" & pids+=("$!")
+ done
+ for pid in "${pids[@]}";do wait "$pid";done
+ tfresh=$(cat "$out"/tarot-* | grep -c '"replayed": false' || true); treplays=$(cat "$out"/tarot-* | grep -c '"replayed": true' || true)
+ tids=$(cat "$out"/tarot-* | grep -o '"readingId": "[^"]*"' | sort -u | wc -l)
+ [[ "$tfresh" == 1 && "$treplays" == 9 && "$tids" -eq 1 ]] || { echo "concurrent tarot retries: fresh=$tfresh replays=$treplays ids=$tids" >&2; exit 1; }
+ rm -f "$out"/tarot-*
  # Every caller gets a definite answer: exactly 3 OK + 7 limit for distinct requests,
  # 1 fresh + 9 replays of the same reading for identical retries.
  ok=$(cat "$out"/diff-* | grep -c '"ok": true' || true); limited=$(cat "$out"/diff-* | grep -c 'USAGE_LIMIT_REACHED' || true)
@@ -62,6 +73,7 @@ DO $$ BEGIN
  IF (SELECT sum(used_count) FROM public.usage_counters WHERE user_id='33333333-3333-4333-8333-333333333333')<>3 THEN RAISE EXCEPTION 'concurrent quota failed';END IF;
  IF (SELECT count(*) FROM public.user_readings WHERE user_id='33333333-3333-4333-8333-333333333333')<>3 THEN RAISE EXCEPTION 'ledger count wrong';END IF;
  IF (SELECT sum(used_count) FROM public.usage_counters WHERE user_id='44444444-4444-4444-8444-444444444444')<>1 THEN RAISE EXCEPTION 'concurrent idempotency failed';END IF;
+ IF (SELECT sum(used_count) FROM public.usage_counters WHERE user_id='55555555-5555-4555-8555-555555555555')<>1 THEN RAISE EXCEPTION 'concurrent tarot idempotency failed';END IF;
 END; $$;
 SQL
  if [[ "$mode" == upgrade ]];then

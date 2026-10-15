@@ -17,6 +17,21 @@ export function resolveEntitlement(
   return 'free';
 }
 
+const isTime=(v:unknown)=>v===null||typeof v==='string';
+/**
+ * Parses the fj_access_snapshot RPC result (the same rows memberTier() used to read in two queries) and resolves
+ * it with resolveEntitlement, so tier policy lives in one TypeScript function. Unexpected shapes fail closed.
+ */
+export function entitlementFromSnapshot(snapshot:unknown,now:Date):Entitlement {
+  const s=snapshot as {access?:unknown;subscriptions?:unknown}|null;
+  const a=s?.access as Record<string,unknown>|null|undefined;
+  const subs=s?.subscriptions;
+  const validAccess=a===null||(!!a&&typeof a==='object'&&isTime(a.trial_ends_at)&&isTime(a.suspended_at));
+  const validSubs=Array.isArray(subs)&&subs.every((x)=>!!x&&typeof x==='object'&&typeof x.status==='string'&&isTime(x.current_period_end)&&isTime(x.verified_at));
+  if(!s||typeof s!=='object'||!validAccess||!validSubs)throw new Error('ACCESS_BACKEND_FAILURE');
+  return resolveEntitlement(a as UserAccess|null,subs as Subscription[],now);
+}
+
 export function permission(entitlement: Entitlement, feature: Feature): {
   enabled: boolean;
   maxUses: number;

@@ -1,5 +1,3 @@
-$ rm -rf .next && env -u APP_ORIGIN -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_TELEMETRY_DISABLED=1 npm run build
-# started 2026-10-14T17:05:00Z
 
 > fortune-journal-mcp@0.2.1 build
 > next build
@@ -9,7 +7,7 @@ $ rm -rf .next && env -u APP_ORIGIN -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_S
    Creating an optimized production build ...
 <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (113kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
 <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (268kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
- ✓ Compiled successfully in 15.7s
+ ✓ Compiled successfully in 43s
    Linting and checking validity of types ...
    Collecting page data ...
    Generating static pages (0/13) ...
@@ -50,4 +48,3 @@ Route (app)                                             Size  First Load JS
 ○  (Static)   prerendered as static content
 ƒ  (Dynamic)  server-rendered on demand
 
-# exit 0

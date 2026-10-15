@@ -77,7 +77,7 @@
 ```bash
 npm ci && npm run release:check     # migration整合 + unit + static + typecheck + build + 使い捨てPG + audit
 supabase start && npm run test:db:supabase              # 実Supabaseイメージで全SQLスイート
-node scripts/e2e-local.mjs                               # loopback限定: OAuth 2.1/PKCE/同意/MCP/RLS/quota/revoke/削除
+node --experimental-strip-types scripts/e2e-local.mjs                            # loopback限定: OAuth 2.1/PKCE/同意/MCP/RLS/quota/revoke/削除
 ```
 
 Staging OAuth / 実Googleログイン / ChatGPT・Claude実ホスト / 顧客Sheets / Meta は、ローカルE2Eで代替せず別項目（未実行ならBLOCKED/NOT RUN）として報告する。

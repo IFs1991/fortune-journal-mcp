@@ -1,8 +1,5 @@
-$ npm run check:pure-types
-# started 2026-10-14T17:04:52Z
 
 > fortune-journal-mcp@0.2.1 check:pure-types
 > node scripts/check-pure-types.mjs
 
 Pure-domain/integration type check PASS (10 files). Next/MCP/Supabase types are not included.
-# exit 0

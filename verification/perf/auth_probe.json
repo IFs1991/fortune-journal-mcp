@@ -1,0 +1,29 @@
+{
+  "ranAt": "2026-10-15T06:31:33.412Z",
+  "node": "v22.22.2",
+  "tokenAlg": "ES256",
+  "latency": {
+    "getUser": {
+      "n": 100,
+      "p50_ms": 108.85,
+      "p95_ms": 158.35
+    },
+    "getClaims": {
+      "n": 100,
+      "p50_ms": 0.83,
+      "p95_ms": 1.35
+    }
+  },
+  "acceptedWhileValid": {
+    "getUser": true,
+    "getClaims": true
+  },
+  "acceptedAfterSessionRevoked": {
+    "getUser": false,
+    "getClaims": true
+  },
+  "acceptedAfterUserDeleted": {
+    "getUser": false,
+    "getClaims": true
+  }
+}

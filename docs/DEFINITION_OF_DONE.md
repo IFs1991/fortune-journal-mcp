@@ -24,7 +24,7 @@
 | Next production build | PASS | `production_build.log`（env未設定でも成功） |
 | Node runtime smoke（`next start`） | PASS | `e2e_local*.json`（local） |
 | Vercel runtime smoke | BLOCKED | Vercel project未作成（作成は要承認） |
-| PR CI（unit / database / build / supabase-local） | NOT RUN | workflowはYAML検証済み。GitHub remote未設定 |
+| PR CI（unit / database / build / supabase-local） | PASS | PR #1（run 38693864153）。mainの直近runは e2e の `.ts` import でFAIL→修正済み |
 | 第三者Action pin | PASS | checkout v4.2.2 / setup-node v4.4.0 / supabase/setup-cli v3.0.1 をGitHub tag refと照合 |
 
 ## G2 Database（release blocker）
@@ -60,6 +60,11 @@
 | 同一request再試行・別入力conflict・日付越えtarot・Free上限 | PASS（local） | E2E |
 | 顧客本人Sheets作成/追記/読み戻し・拒否・重複・式注入・他人のsheet | BLOCKED | 顧客側Googleコネクタでの手動E2E（自社MCPはGoogleに触れない）。書込みルールは `get_journal_schema.writeRules` で提供（unit/E2E PASS） |
 | MCP完了をSheets保存成功と表示しない、feedback明示選択、計測拒否でも基本機能 | PASS | E2E + tool記述 |
+| 通信: draw_tarot / get_access_status は Auth 1 + DB 1、calculate_numerology は増加なし、期限切れ401はAuth 0 | PASS（local） | Kong実測 `verification/perf/`、[PERFORMANCE.md](PERFORMANCE.md) |
+| 認証の失効即時性を維持（毎回 getUser、ローカル検証のみの受理なし） | PASS（local） | E2E revoke/削除後401、`perf/auth_probe.json` |
+| Trial終了後の同一tarot再試行・停止ユーザー拒否・MCP経由10並列で1単位 | PASS（local） | E2E + `v02_forward_fix_08.sql` + `db.log`。Trial終了後replayの仕様はオーナー承認済み（2026-10-15） |
+| ホストが事前ツール呼出しを省くか（ChatGPT/Claude/Codex） | BLOCKED | 実ホスト接続にStaging公開URLが必要 |
+| Vercel/実Supabase上の往復時間・コールドスタート | BLOCKED | Staging未作成 |
 
 ## G4 Threads P0
 

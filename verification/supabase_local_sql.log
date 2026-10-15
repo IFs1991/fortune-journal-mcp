@@ -1,5 +1,3 @@
-$ bash scripts/test-supabase-local.sh
-# started 2026-10-14T17:06:30Z
 PASS: rls_security (local Supabase stack)
 PASS: v02_security (local Supabase stack)
 PASS: v02_transactions (local Supabase stack)
@@ -7,4 +5,4 @@ PASS: v02_billing (local Supabase stack)
 PASS: v02_retention_kpis (local Supabase stack)
 PASS: v02_negative_edge (local Supabase stack)
 PASS: v02_forward_fix_06 (local Supabase stack)
-# exit 0
+PASS: v02_forward_fix_08 (local Supabase stack)

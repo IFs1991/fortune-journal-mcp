@@ -24,8 +24,9 @@ E2E（ローカルstackのGoTrue OAuth 2.1 + PostgREST + このapp）:
 ```bash
 # 使い捨て秘密を生成して env に入れ（ファイルはリポジトリ外）、APP_ORIGIN=http://localhost:3000 で build/start
 npm run build && npx next start -p 3000
-PRODUCT_ANALYTICS_ENABLED=false OPERATIONS_ENABLED=false node scripts/e2e-local.mjs   # 15 checks
-PRODUCT_ANALYTICS_ENABLED=true  OPERATIONS_ENABLED=true  node scripts/e2e-local.mjs   # 16 checks（appも同flagで起動）
+PRODUCT_ANALYTICS_ENABLED=false OPERATIONS_ENABLED=false node --experimental-strip-types scripts/e2e-local.mjs   # 19 checks
+PRODUCT_ANALYTICS_ENABLED=true  OPERATIONS_ENABLED=true node --experimental-strip-types scripts/e2e-local.mjs   # 20 checks（appも同flagで起動）
+node scripts/bench-mcp-local.mjs --server-log <app-stdout-file> --out verification/perf/<label>.json   # 性能比較。appは MCP_TIMING_LOG=true で起動（docs/PERFORMANCE.md）
 ```
 
 E2Eスクリプトはloopback以外を拒否し、トークン/鍵を表示しない。テストユーザーはAdmin APIで作成し、終了時に削除する。
@@ -76,6 +77,7 @@ read-only確認では Fortune Journal用Vercel projectは**存在しない**（�
 | `PRODUCT_ANALYTICS_ENABLED` `OPERATIONS_ENABLED` `THREADS_INSIGHTS_ENABLED` `THREADS_PUBLISH_ENABLED` | すべて `false` | 初回Stagingは全OFF |
 | `THREADS_ACCOUNT_ID` `THREADS_ACCESS_TOKEN` `THREADS_API_VERSION` | 空 | Meta権限/API版確認まで BLOCKED |
 | `MCP_CLIENT_NAMES_JSON` | `{}` | 実際に確認したOAuth client_idだけを `{"<id>":"chatgpt"}` 形式で追加（同意画面の verified 表示と接続イベント分類に使う。流入元ではない） |
+| `MCP_TIMING_LOG` | `false`（計測時のみ `true`） | `FJ_MCP_TIMING` 1行/ツール呼出し（tool・エラーコード・total/auth/db/calculation ms・外部呼出し数）。入力・ID・トークンは出さない。DB書込みなし |
 
 ## 3. Staging DB 適用順（`db push` は要承認）
 
@@ -85,9 +87,9 @@ supabase migration list --linked                        # 期待: remote履歴�
 mkdir -p backups                                        # backups/ は .gitignore 対象
 supabase db dump --linked -f backups/staging-pre-v021-schema.sql
 supabase db dump --linked --data-only -f backups/staging-pre-v021-data.sql
-supabase db push --linked --dry-run                     # 期待: 8本（initial + v02 01..05 + 06 + 07）。それ以外が出たら停止
+supabase db push --linked --dry-run                     # 期待: 9本（initial + v02 01..05 + 06 + 07 + 08）。それ以外が出たら停止
 supabase db push --linked                               # ★承認後のみ
-supabase migration list --linked                        # local/remote 8本一致を確認
+supabase migration list --linked                        # local/remote 9本一致を確認
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/rls_security.sql   # read-onlyのcatalog検査のみ
 supabase db advisors --linked --type all --level warn --fail-on warn
 ```

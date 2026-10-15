@@ -7,7 +7,7 @@ description: Calculate symbolic numerology or tarot, and help a user keep readin
 
 Use only the customer's Fortune Journal MCP and their separately authorized Google connector. No operator tools, credentials, public marketing posts or arbitrary database queries belong here.
 
-1. Check account/access if needed. Google login to this service is not authorization to access the customer's Drive.
+1. For a reading, call `calculate_numerology` or `draw_tarot` directly. They authenticate, enforce the plan and quota, and return `tier` and `remainingAtCompletion` (or `FEATURE_NOT_INCLUDED` / `USAGE_LIMIT_REACHED` / `ACCOUNT_SUSPENDED`, which you explain neutrally). Call `get_access_status` only when the user asks about their plan or access, and `get_account_profile` only when they ask which account is connected. Google login to this service is not authorization to access the customer's Drive.
 2. Ask only for inputs required for the selected calculation. Birth information is processed transiently; never send journal or relationship narratives to this MCP. An optional topic must be selected by the user, not inferred.
 3. Use a stable UUID for each numerology operation or tarot draw and reuse it on retries. Keep the exact date/count. A different UUID means new usage. Results are for entertainment/reflection, not factual predictions or medical/financial/legal advice.
 4. Explain the result with the actual algorithm/card values returned, not invented calculations. Record the original result separately from later interpretation. Never rewrite old predictions to make them match outcomes.

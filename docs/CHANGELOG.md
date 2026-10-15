@@ -1,3 +1,22 @@
+# Unreleased — MCP communication optimization
+
+Details, auth decision and measurements: [PERFORMANCE.md](PERFORMANCE.md).
+
+## Changed
+
+- **DB (migration 08)**: `draw_tarot` and `get_access_status` need one PostgREST call instead of two. `fj_record_calculation` looks up an existing draw itself (cross-day tarot retries replay without the app-side lookup); identical retries are checked before the tier gate, so a retry after the trial ended replays the delivered draw without usage. New read-only `fj_access_snapshot` (service_role only); tier policy stays in `resolveEntitlement`. **Apply 08 before deploying the app.**
+- **Auth**: expired / foreign-issuer / non-OAuth bearer tokens are rejected before calling Supabase Auth. Accepted tokens are still verified with `auth.getUser()` on every request (immediate revocation kept; `getClaims()`-only verification was measured and rejected).
+- **Telemetry**: `get_account_profile` records the optional `mcp_connected` event after the response (`next/server` `after()`); consent and dedupe unchanged.
+- **MCP descriptions / customer skill**: call `calculate_numerology` / `draw_tarot` directly; `get_access_status` / `get_account_profile` only when the user asks. Inputs/outputs unchanged.
+
+## Added
+
+- Optional per-call timing log (`MCP_TIMING_LOG=true` → `FJ_MCP_TIMING`, no inputs/IDs/tokens, no DB writes); `scripts/bench-mcp-local.mjs`, `scripts/probe-auth-verification.mjs`; SQL suite `v02_forward_fix_08.sql`; 10-parallel cross-date tarot retries in the PG suite; E2E for tampered tokens, post-trial replay, suspension, 10 parallel identical MCP draws, deferred telemetry with/without consent.
+
+## Fixed
+
+- **CI**: `supabase-local` E2E failed with `ERR_UNKNOWN_FILE_EXTENSION: .ts` on Node 22.16 — run `e2e-local.mjs` with `--experimental-strip-types`.
+
 # v0.2.1 — Deploy-Ready hardening (2026-10-15)
 
 ## Fixed

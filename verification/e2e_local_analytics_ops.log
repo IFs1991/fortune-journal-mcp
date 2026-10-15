@@ -1,9 +1,9 @@
-$ set -a; . 'C:/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/9a355fc9-2bcb-43c4-b426-39441b23783b/scratchpad/e2e.env'; set +a; PRODUCT_ANALYTICS_ENABLED=true OPERATIONS_ENABLED=true node scripts/e2e-local.mjs --out verification/e2e_local_analytics_ops.json
-# started 2026-10-14T17:07:49Z
 PASS Google-only: email signup, password and OTP sign-in are refused
 PASS Data API: anon key reads nothing and calls no RPC
 PASS OAuth: DCR client + PKCE + consent page shows client and callback
 PASS MCP: browser session JWT (no client_id) and garbage are 401 with discovery
+NOTE expired-token signing skipped: stack does not use the local HS256 secret
+PASS MCP: expired and tampered OAuth tokens are 401 (local claim pre-check never authenticates on its own)
 PASS MCP: tools/list exposes exactly the 7 customer tools with OAuth security metadata
 PASS Trial starts at first calculation (not at sign-in/consent); retry is idempotent; conflict rejected
 PASS Tarot retry on a later day replays the original draw instead of charging again
@@ -17,6 +17,6 @@ PASS OAuth: user revokes the connection in the app; access and refresh tokens st
 PASS OAuth: deny returns access_denied to the client; another user cannot act on A's request
 PASS Cron: bearer CRON_SECRET required; maintenance purges via the app (Threads insights off)
 PASS Ops API: separate HMAC, disabled by default; signed report works only when enabled
+PASS Concurrency and suspension: 10 parallel identical draws charge once; suspended account is refused everywhere
 PASS Account deletion: confirmation + Origin required; afterwards OAuth tokens are rejected
-18 passed / 0 failed
-# exit 0
+20 passed / 0 failed

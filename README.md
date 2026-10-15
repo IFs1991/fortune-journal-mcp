@@ -28,7 +28,7 @@
 npm run release:check     # migration整合・unit・static・typecheck・build・使い捨てPG・audit
 supabase start            # 専用ローカルstack（554xx）
 npm run test:db:supabase  # 実SupabaseイメージでSQLスイート
-node scripts/e2e-local.mjs  # appをlocalhost:3000で起動後。OAuth 2.1/PKCE/同意/MCP/RLS
+node --experimental-strip-types scripts/e2e-local.mjs  # appをlocalhost:3000で起動後。OAuth 2.1/PKCE/同意/MCP/RLS
 ```
 
 Stagingへの適用は [検証・デプロイ手順](docs/DEPLOYMENT_AND_TESTS.md) の順（`db push --dry-run` → 承認 → `db push`）。migrationは8本（旧1 + v0.2の5 + forward-fix 2）。
