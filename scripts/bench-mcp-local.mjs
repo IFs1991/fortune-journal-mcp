@@ -4,16 +4,17 @@
 // Refuses any non-loopback target. Prints no tokens or keys; the test user is deleted at the end.
 // Usage: supabase start; build+start the app (same env as e2e-local); then
 //   node scripts/bench-mcp-local.mjs [--samples 40] [--warmup 5] [--label before] [--out verification/perf/before.json]
+//     [--server-log <app stdout file>]  # with MCP_TIMING_LOG=true: adds server-side FJ_MCP_TIMING percentiles
 import {spawnSync} from 'node:child_process';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
-import {mkdirSync,writeFileSync} from 'node:fs';
+import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {release,cpus} from 'node:os';
 import {createClient} from '@supabase/supabase-js';
 import {createServerClient} from '@supabase/ssr';
 
 const arg=(name,fallback)=>{const i=process.argv.indexOf(`--${name}`);return i>0?process.argv[i+1]:fallback;};
-const SAMPLES=Number(arg('samples',40)),WARMUP=Number(arg('warmup',5)),LABEL=arg('label','run'),OUT=arg('out',null);
+const SAMPLES=Number(arg('samples',40)),WARMUP=Number(arg('warmup',5)),LABEL=arg('label','run'),OUT=arg('out',null),SERVER_LOG=arg('server-log',null);
 const loopback=u=>['127.0.0.1','localhost','[::1]'].includes(new URL(u).hostname);
 const status=JSON.parse(spawnSync('supabase',['status','-o','json'],{encoding:'utf8',input:''}).stdout||'{}');
 const API=status.API_URL,APP=process.env.APP_ORIGIN??'http://localhost:3000';
@@ -31,6 +32,10 @@ function kongLines(){
  const r=spawnSync('docker',['logs',KONG],{encoding:'utf8',maxBuffer:256*1024*1024});
  return `${r.stdout}\n${r.stderr}`.split('\n').filter(l=>/"(GET|POST|PATCH|DELETE|HEAD) \/(auth|rest)\/v1\//.test(l));
 }
+// Server-side timing lines written by the app (src/lib/perf.ts) since a given byte offset.
+const serverLogSize=()=>SERVER_LOG?readFileSync(SERVER_LOG).length:0;
+const serverTimings=from=>SERVER_LOG?readFileSync(SERVER_LOG).subarray(from).toString('utf8').split(/\r?\n/)
+ .filter(l=>l.startsWith('FJ_MCP_TIMING ')).map(l=>JSON.parse(l.slice('FJ_MCP_TIMING '.length))):[];
 const classify=lines=>({auth:lines.filter(l=>/ \/auth\/v1\//.test(l)).length,db:lines.filter(l=>/ \/rest\/v1\//.test(l)).length});
 
 async function newUser(){
@@ -95,7 +100,7 @@ try{
  for(const [scenario,args] of Object.entries(scenarios)){
   const name=scenario.replace(/\(.*\)$/,'');
   for(let i=0;i<WARMUP;i++)await call(token,name,args());
-  await new Promise(r=>setTimeout(r,300));const before=kongLines().length;
+  await new Promise(r=>setTimeout(r,300));const before=kongLines().length,logFrom=serverLogSize();
   const times=[],errors={};
   for(let i=0;i<SAMPLES;i++){const r=await call(token,name,args());times.push(r.ms);if(r.error)errors[r.error]=(errors[r.error]??0)+1;}
   await new Promise(r=>setTimeout(r,300));const counted=classify(kongLines().slice(before));
@@ -103,6 +108,10 @@ try{
   report.tools[scenario]={n:times.length,p50_ms:round(percentile(times,50)),p95_ms:round(percentile(times,95)),mean_ms:round(times.reduce((a,b)=>a+b,0)/times.length),
    min_ms:round(Math.min(...times)),max_ms:round(Math.max(...times)),auth_calls_per_call:round(counted.auth/SAMPLES),db_calls_per_call:round(counted.db/SAMPLES),
    success_rate:round((SAMPLES-Object.values(errors).reduce((a,b)=>a+b,0))/SAMPLES),errors};
+  const server=serverTimings(logFrom).filter(t=>t.tool===name);
+  if(server.length){const pick=k=>server.map(t=>t[k]);
+   report.tools[scenario].server={n:server.length,...Object.fromEntries(['total_ms','auth_ms','db_ms','calculation_ms'].flatMap(k=>[[`${k.replace('_ms','')}_p50_ms`,round(percentile(pick(k),50))],[`${k.replace('_ms','')}_p95_ms`,round(percentile(pick(k),95))]])),
+    outbound_auth_calls:round(pick('outbound_auth_calls').reduce((a,b)=>a+b,0)/server.length),outbound_db_calls:round(pick('outbound_db_calls').reduce((a,b)=>a+b,0)/server.length)};}
   console.log(scenario.padEnd(26),JSON.stringify(report.tools[scenario]));
  }
 }finally{await admin.auth.admin.deleteUser(user.id).catch(()=>{});}

@@ -76,6 +76,7 @@ read-only確認では Fortune Journal用Vercel projectは**存在しない**（�
 | `PRODUCT_ANALYTICS_ENABLED` `OPERATIONS_ENABLED` `THREADS_INSIGHTS_ENABLED` `THREADS_PUBLISH_ENABLED` | すべて `false` | 初回Stagingは全OFF |
 | `THREADS_ACCOUNT_ID` `THREADS_ACCESS_TOKEN` `THREADS_API_VERSION` | 空 | Meta権限/API版確認まで BLOCKED |
 | `MCP_CLIENT_NAMES_JSON` | `{}` | 実際に確認したOAuth client_idだけを `{"<id>":"chatgpt"}` 形式で追加（同意画面の verified 表示と接続イベント分類に使う。流入元ではない） |
+| `MCP_TIMING_LOG` | `false`（計測時のみ `true`） | `FJ_MCP_TIMING` 1行/ツール呼出し（tool・エラーコード・total/auth/db/calculation ms・外部呼出し数）。入力・ID・トークンは出さない。DB書込みなし |
 
 ## 3. Staging DB 適用順（`db push` は要承認）
 
