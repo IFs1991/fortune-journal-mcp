@@ -1,7 +1,7 @@
 import type { AuthInfo } from '@modelcontextprotocol/server';
 import { publicSupabase } from '@/src/lib/supabase/server';
 import { publicConfig } from '@/src/lib/env';
-import { decodeJwtPayload, validateMcpAccessClaims } from '@/src/domain/oauth-claims';
+import { decodeJwtPayload, precheckMcpAccessClaims, validateMcpAccessClaims } from '@/src/domain/oauth-claims';
 
 /**
  * Verify every bearer token with Supabase Auth (signature, session and account liveness),
@@ -13,13 +13,16 @@ import { decodeJwtPayload, validateMcpAccessClaims } from '@/src/domain/oauth-cl
 export async function verifyOAuthBearer(_req: Request, bearerToken?: string): Promise<AuthInfo | undefined> {
   if (!bearerToken || bearerToken.length > 16_384) return undefined;
   const payload = decodeJwtPayload(bearerToken);
-  if (!payload || typeof payload.client_id !== 'string') return undefined; // cheap reject before a network call
+  if (!payload) return undefined;
   try {
+    const issuer = `${publicConfig().supabaseUrl.replace(/\/$/, '')}/auth/v1`;
+    // Cheap reject before a network call: expired, foreign-issuer or non-OAuth tokens can never pass below.
+    // This only rejects; acceptance still requires Supabase Auth (signature, live session, existing user).
+    if (!precheckMcpAccessClaims(payload, {issuer, nowSeconds: Date.now() / 1000})) return undefined;
     const {data,error} = await publicSupabase().auth.getUser(bearerToken);
     if (error || !data.user) return undefined;
-    const {supabaseUrl} = publicConfig();
     const claims = validateMcpAccessClaims(payload, {
-      issuer: `${supabaseUrl.replace(/\/$/, '')}/auth/v1`, userId: data.user.id, nowSeconds: Date.now() / 1000,
+      issuer, userId: data.user.id, nowSeconds: Date.now() / 1000,
     });
     if (!claims) return undefined;
     return {token: bearerToken, scopes: [], clientId: claims.clientId, expiresAt: claims.expiresAt, extra: {userId: data.user.id}};
