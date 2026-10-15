@@ -7,6 +7,7 @@ test('outbound requests are classified as Supabase Auth, PostgREST or other',()=
  assert.equal(classifyOutbound('http://127.0.0.1:55421/rest/v1/rpc/fj_record_calculation'),'db');
  assert.equal(classifyOutbound(new URL('http://127.0.0.1:55421/rest/v1/user_access?select=*')),'db');
  assert.equal(classifyOutbound('https://graph.threads.net/v1.0/me'),null);
+ assert.equal(classifyOutbound('/relative/rest/v1/x'),null); // metrics must never break a request
 });
 test('metered fetch counts and times calls only inside the current request',async()=>{
  const fetch=createMeteredFetch(fakeFetch());

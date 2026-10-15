@@ -11,7 +11,8 @@ const store=new AsyncLocalStorage<RequestMetrics>();
 const round=(ms:number)=>Math.round(ms*100)/100;
 
 export function classifyOutbound(url:string|URL):'auth'|'db'|null {
- const path=new URL(String(url)).pathname;
+ let path:string;
+ try {path=new URL(String(url)).pathname;} catch {return null;} // metrics must never break a request
  return path.startsWith('/auth/v1/')?'auth':path.startsWith('/rest/v1/')?'db':null;
 }
 
