@@ -108,11 +108,9 @@ const handler = createMcpHandler((server) => {
     try {
       const operationId=drawId??randomUUID();
       const reading=measureCalculation(()=>drawTarot(id,key,count,operationId));
-      // Tarot is not keyed to today's date: a retry tomorrow must not silently draw or charge again.
-      const prior=await adminSupabase().from('user_readings').select('target_date').eq('user_id',id).eq('request_id',operationId).maybeSingle();
-      if(prior.error)throw new Error('READING_LOOKUP_FAILED');
-      const date=prior.data?.target_date??new Date().toISOString().slice(0,10);
-      const access=await recordCalculation({userId:id,requestId:operationId,feature:'draw_tarot',algorithm:reading.algorithm,targetDate:date,orderedInput:[reading.algorithm,count,process.env.TAROT_KEY_VERSION??'v1',sha256(key)],topic,client:platformForClient(ctx.http?.authInfo?.clientId)});
+      // Tarot is not keyed to today's date: fj_record_calculation (migration 08) replays an identical retry of
+      // this drawId on any later day from its own ledger lookup, so no separate user_readings read is needed.
+      const access=await recordCalculation({userId:id,requestId:operationId,feature:'draw_tarot',algorithm:reading.algorithm,targetDate:new Date().toISOString().slice(0,10),orderedInput:[reading.algorithm,count,process.env.TAROT_KEY_VERSION??'v1',sha256(key)],topic,client:platformForClient(ctx.http?.authInfo?.clientId)});
       if (!access.ok) return toolError(access.reason ?? 'NOT_ALLOWED');
       return result({...reading,readingId:access.readingId,tier:access.tier,remainingAtCompletion:access.remainingAtCompletion,replayed:access.replayed});
     } catch { return toolError('SERVICE_TEMPORARILY_UNAVAILABLE'); }

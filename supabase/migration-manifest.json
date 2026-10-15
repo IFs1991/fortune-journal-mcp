@@ -41,6 +41,11 @@
       "file": "20261014164844_fj_v02_07_fk_covering_indexes.sql",
       "sha256": "d01b14f052a4063dd6f5d51858bbc9d88af2efa146160355dab9227b8810dd12",
       "fixes": "advisor unindexed_foreign_keys: purge cascades scanned child tables"
+    },
+    {
+      "file": "20261015062212_fj_v02_08_single_roundtrip_mcp.sql",
+      "sha256": "803e2e41e7281246f21fe140899463f13a2808c0fd2fd87d071b3d80fc3eebca",
+      "fixes": "MCP round trips: draw_tarot replay lookup inside fj_record_calculation; fj_access_snapshot for get_access_status"
     }
   ]
 }
