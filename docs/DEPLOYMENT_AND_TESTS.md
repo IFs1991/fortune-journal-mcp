@@ -54,7 +54,7 @@ E2Eスクリプトはloopback以外を拒否し、トークン/鍵を表示し�
 
 ### 2.2 Vercel（新規・専用project）
 
-read-only確認では Fortune Journal用Vercel projectは**存在しない**（既存の `uranai` 等を名前から流用しない。関連性はオーナーが判断）。
+2026-10-16 のread-only監査（[verification/vercel_audit_2026-10-16.md](../verification/vercel_audit_2026-10-16.md)）: GitHub連携済みの Vercel project **`fortune-journal-mcp`** が存在し、**Production branch = `main`（マージで自動Production deploy）**、env 0件、Node.js 24.x、Deployment Protection = Standard（本番ドメイン公開）。このリポジトリの `.vercel/` は同projectにlink済み。Staging用projectは存在しない（既存の `uranai` 等を名前から流用しない。関連性はオーナーが判断）。下表は Staging 用の計画値で、既存projectとの差（Node版・保護範囲・Production branch）の扱いは監査ファイルの修正計画を参照。
 
 | 項目 | 設定 |
 |---|---|
@@ -106,7 +106,7 @@ Staging DBには書き込み系SQLテスト（`v02_*.sql`）を流さない。�
 ## 4. Vercel Staging デプロイ（要承認）
 
 ```bash
-vercel link                                   # 新規 fortune-journal-staging を選択（既存projectを選ばない）
+vercel link                                   # 新規 fortune-journal-staging を選択。.vercel/ は現在 Production の fortune-journal-mcp にlink済みなので、再linkかStaging用の別checkoutで行う
 vercel env ls                                 # read-only: 2.3 の変数が揃っていることを確認
 vercel deploy                                 # Preview。★承認後のみ（--prod は使わない）
 ```
@@ -139,7 +139,7 @@ vercel deploy                                 # Preview。★承認後のみ（-
 
 ## 7. CI
 
-`.github/workflows/ci.yml`（PR / main push / 手動）: `build`（npm ci・test・static・db:check-prepared・typecheck・build・audit）、`database`（使い捨てPostgres 17 digest固定）、`supabase-local`（Supabase CLI 2.120.0 で実stack + SQLスイート + E2E 2モード）。秘密値は不要、deployしない。**GitHub remote未設定のため未実行**。初回push後に結果を確認する。
+`.github/workflows/ci.yml`（PR / main push / 手動）: `build`（npm ci・test・static・db:check-prepared・typecheck・build・audit）、`database`（使い捨てPostgres 17 digest固定）、`supabase-local`（Supabase CLI 2.120.0 で実stack + SQLスイート + E2E 2モード）。秘密値は不要、deployしない（ただしVercel側のGit連携が別途、mainのpushでProduction deployを行う）。PR #1 と main f15bb55 で全job PASS。
 
 ## 8. Release
 
