@@ -1,0 +1,26 @@
+# pgbench on disposable postgres:17 (digest-pinned), 2026-10-16. Before = 3de9f3c migrations, After = baseline.
+# Scenario: 100 users with verified Premium; users 51-100 preloaded with 150 readings today. One client, sequential.
+## round 1 before
+access_status n=2000 p50_ms=0.210 p95_ms=0.471 mean_ms=0.235
+replay n=2000 p50_ms=1.163 p95_ms=2.762 mean_ms=1.395
+fresh_light n=2000 p50_ms=1.287 p95_ms=2.271 mean_ms=1.452
+fresh_heavy n=1000 p50_ms=1.663 p95_ms=3.085 mean_ms=2.101
+readings=10550
+## round 1 after
+access_status n=2000 p50_ms=0.119 p95_ms=0.489 mean_ms=0.191
+replay n=2000 p50_ms=1.265 p95_ms=2.402 mean_ms=1.427
+fresh_light n=2000 p50_ms=1.510 p95_ms=3.290 mean_ms=1.776
+fresh_heavy n=1000 p50_ms=1.941 p95_ms=4.829 mean_ms=2.279
+readings=10550
+## round 2 before
+access_status n=2000 p50_ms=0.115 p95_ms=0.408 mean_ms=0.160
+replay n=2000 p50_ms=1.085 p95_ms=1.927 mean_ms=1.218
+fresh_light n=2000 p50_ms=1.381 p95_ms=2.792 mean_ms=1.622
+fresh_heavy n=1000 p50_ms=2.020 p95_ms=3.854 mean_ms=2.270
+readings=10550
+## round 2 after
+access_status n=2000 p50_ms=0.130 p95_ms=0.297 mean_ms=0.141
+replay n=2000 p50_ms=1.191 p95_ms=2.377 mean_ms=1.394
+fresh_light n=2000 p50_ms=1.614 p95_ms=3.448 mean_ms=1.884
+fresh_heavy n=1000 p50_ms=1.515 p95_ms=2.428 mean_ms=1.657
+readings=10550

@@ -1,0 +1,8 @@
+$ npm run db:schema:check
+# started 2026-10-16T03:03:31Z at commit fd0d36f
+
+> fortune-journal-mcp@0.3.0 db:schema:check
+> bash scripts/db-schema.sh --check
+
+PASS: committed schema snapshot and catalog match the migrations.
+# exit 0, 10214 ms

@@ -1,0 +1,9 @@
+$ npm run format:check
+# started 2026-10-16T03:01:58Z at commit fd0d36f
+
+> fortune-journal-mcp@0.3.0 format:check
+> prettier --check .
+
+Checking formatting...
+All matched files use Prettier code style!
+# exit 0, 4152 ms

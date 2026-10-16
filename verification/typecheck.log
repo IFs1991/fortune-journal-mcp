@@ -1,4 +1,7 @@
+$ npm run typecheck
+# started 2026-10-16T03:02:08Z at commit fd0d36f
 
-> fortune-journal-mcp@0.2.1 typecheck
+> fortune-journal-mcp@0.3.0 typecheck
 > tsc --noEmit
 
+# exit 0, 4322 ms

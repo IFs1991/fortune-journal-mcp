@@ -1,3 +1,5 @@
+$ set -a && . /c/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/c367663d-100d-48b4-baaf-ae6e1114fff8/scratchpad/fj.env && set +a && PRODUCT_ANALYTICS_ENABLED=false OPERATIONS_ENABLED=false node --experimental-strip-types scripts/e2e-local.mjs --out verification/e2e_local.json
+# started 2026-10-16T03:05:37Z at commit fd0d36f
 PASS Google-only: email signup, password and OTP sign-in are refused
 PASS Data API: anon key reads nothing and calls no RPC
 PASS OAuth: DCR client + PKCE + consent page shows client and callback
@@ -9,7 +11,7 @@ PASS Trial starts at first calculation (not at sign-in/consent); retry is idempo
 PASS Tarot retry on a later day replays the original draw instead of charging again
 PASS Free tier after trial: tarot denied, numerology 3/ISO-week then USAGE_LIMIT_REACHED
 PASS Optional analytics tools refuse when globally disabled; schema tool never claims a Google save
-PASS Data API: user A sees only own rows, cannot escalate; B cannot see A
+PASS Data API: signed-in users can read or change nothing directly (app-only access)
 PASS Export: own data only, paged, no fingerprint; requires a session
 PASS OAuth: refresh token rotates and yields a working access token
 PASS OAuth: user revokes the connection in the app; access and refresh tokens stop working
@@ -19,3 +21,4 @@ PASS Ops API: separate HMAC, disabled by default; signed report works only when 
 PASS Concurrency and suspension: 10 parallel identical draws charge once; suspended account is refused everywhere
 PASS Account deletion: confirmation + Origin required; afterwards OAuth tokens are rejected
 19 passed / 0 failed
+# exit 0, 14862 ms
