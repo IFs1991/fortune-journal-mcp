@@ -23,7 +23,9 @@
     "release:check": "npm run db:check-prepared && npm run check && npm run test:db && npm audit --audit-level=high",
     "ops": "node --experimental-strip-types scripts/ops.mjs",
     "test:e2e:local": "node --experimental-strip-types scripts/e2e-local.mjs --out verification/e2e_local.json",
-    "test:db:supabase": "bash scripts/test-supabase-local.sh"
+    "test:db:supabase": "bash scripts/test-supabase-local.sh",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",
@@ -39,6 +41,7 @@
     "@types/node": "22.15.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.2.3",
+    "prettier": "3.9.9",
     "typescript": "5.8.3"
   },
   "overrides": {
