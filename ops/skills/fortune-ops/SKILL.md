@@ -3,9 +3,9 @@ name: fortune-ops
 description: Private owner-only operation of Fortune Journal marketing, snapshots and cohort reports through the signed operations CLI. Never distribute with the customer plugin.
 ---
 
-Read AGENTS.md and docs/BUILD_STATUS.md first. This skill is for a reviewed owner execution environment, not an ordinary customer conversation.
+Read AGENTS.md and docs/OPERATIONS.md §7 first. This skill is for a reviewed owner execution environment, not an ordinary customer conversation.
 
-Use `node --env-file=.env.local --experimental-strip-types scripts/ops.mjs <command.json>`. The CLI signs using environment secrets; never print those secrets, a signed authorization header, or a customer record.
+Use `node --env-file=<env file outside the repo> --experimental-strip-types scripts/ops.mjs <command.json>` (commands and their validation: src/ops/commands.ts). The CLI signs using environment secrets; never print those secrets, a signed authorization header, or a customer record.
 
 Default action is read-only report. Preserve denominators, mature cohorts, NULLs, unknown attribution and currencies. Do not call customer host inference cost zero. Use only public owner content for drafts. Never infer a user's interests or fill missing historical metrics.
 

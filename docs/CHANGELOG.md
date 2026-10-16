@@ -1,4 +1,31 @@
-# Unreleased — MCP communication optimization
+# v0.3.0 — Pre-release baseline (2026-10-16)
+
+Record with before/after numbers: [verification/refactor_2026-10-16.md](../verification/refactor_2026-10-16.md).
+
+## Changed (breaking for databases built from v0.2.x; none exists remotely)
+
+- **DB**: one baseline migration replaces initial + 5 additive + 3 forward fixes, templates and manifest (history stays in Git). `usage_counters` removed (usage counted from `user_readings` under the existing row lock); tier rule only in `fj_access_status`, limits only in `fj_record_calculation`; no anon/authenticated grants or policies (Data API is not a product surface); `billing_events` simplified to a verified-only ledger with `state_disposition`; snapshot tables keep `run_id` without an FK; unused columns, states and indexes removed. `fj_access_snapshot` and `consume_usage` removed.
+- **MCP**: `src/mcp/tools.ts` lists all 7 tools; auth gate, timing and fail-closed codes applied once. Wire contract (names, input/output schemas, error codes) unchanged; descriptions tightened and list their error codes.
+- **Operator API**: `src/lib/operations.ts` split into `src/ops/*`; report reads run in parallel; scheduled snapshot lookup is one query.
+- **Web**: account logic in `src/account.ts`; login page reads preferences and grants in parallel.
+- **Docs**: AGENTS.md is the only rule file; BUILD_STATUS merged into DEFINITION_OF_DONE; DEPLOYMENT_AND_TESTS + UPGRADE + THREADS_OPERATIONS + OPERATIONS_AGENT → OPERATIONS.md; DB_RLS_DESIGN → DATABASE.md + generated DB_CATALOG.md; DATA_BOUNDARIES → SECURITY.md; MANIFEST.sha256 removed (Git is the integrity record).
+
+## Added
+
+- Prettier 3.9.9 (`format`, `format:check`), `noUnusedLocals/Parameters`, CI Node 24 build.
+- `npm run db:schema` (generated `supabase/schema.sql`, `docs/generated/DB_CATALOG.md`) with CI drift check; `supabase/applied-migrations.json` guard.
+- SQL suites by feature (catalog, calculations, privacy, billing, operations, retention); dump/restore round trip in `test-db.sh`; unit contract tests for the tool registry, ops commands and export input; `scripts/probe-resource-audience.mjs`, `scripts/bench-db.sh`.
+
+## Fixed
+
+- Export accepted prototype keys as a resource (`resource=__proto__`) and then failed with 503; now 400.
+- `first_calculated_at` update rewrote the `user_access` row on every calculation.
+
+## Removed
+
+- TypeScript copies of DB policy and KPI formulas (`entitlements.ts`, `metrics.ts`), unconnected billing adapter scaffolding, unused `escapeSheetText`, syntax-only/pure-type check scripts (full typecheck covers them).
+
+# PR #1 (merged to main 2026-10-15 as f15bb55, version stayed 0.2.1) — MCP communication optimization
 
 Details, auth decision and measurements: [PERFORMANCE.md](PERFORMANCE.md).
 

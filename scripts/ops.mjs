@@ -1,6 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import {signOps} from '../src/domain/security.ts';
-// Use node --env-file=.env.local --experimental-strip-types scripts/ops.mjs command.json
+// Use node --env-file=<env file outside the repo> --experimental-strip-types scripts/ops.mjs command.json
 // This is an explicit operator command, never included in a customer's MCP configuration.
 const input = process.argv[2];
 if (!input) throw new Error('Usage: scripts/ops.mjs command.json');
