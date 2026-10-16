@@ -58,7 +58,7 @@ GitHub Actions: main の f15bb55 push run 38777543463 は **success**（直前2�
 
 ## 修正計画（提案のみ・未実施。各手順は対象ID・変更・リスク・ロールバックを示してオーナーの個別承認後）
 
-1. **今すぐ（設定まで）Productionを閉じる** — Deployment Protection の scope を Standard → **All Deployments**（Vercel Authentication、全プランで追加費用なし）。本番ドメインも302になり、外部からの500露出が止まる。ロールバックは scope を戻すだけ。代替: Vercel の project pause（全URLが停止しcronも止まる）。Password Protection は Pro で $20/月/project のため不要。cron が保護下でどう扱われるかは切替後に `vercel logs` で確認する（現状どのみち503）。
+1. **【実施済み 2026-10-16 10:35 JST、下記「変更記録」】今すぐ（設定まで）Productionを閉じる** — Deployment Protection の scope を Standard → **All Deployments**（Vercel Authentication、全プランで追加費用なし）。本番ドメインも302になり、外部からの500露出が止まる。ロールバックは scope を戻すだけ。代替: Vercel の project pause（全URLが停止しcronも止まる）。Password Protection は Pro で $20/月/project のため不要。cron が保護下でどう扱われるかは切替後に `vercel logs` で確認する（現状どのみち503）。
 2. **mainマージ＝Production deployを止めるか決める** — 選択肢: (a) Production branch を未使用ブランチ（例 `release`）に変更し、mainはPreviewにする、(b) Ignored Build Step で Production build を一時停止、(c) 現状維持（1の保護で十分とする）。推奨は (a)：P1判定までProductionに出さないというDoDのgateと一致する。
 3. **トポロジーを決める** — 推奨: `fortune-journal-mcp` を将来のProduction専用とし、runbookどおり Staging は別Vercel project `fortune-journal-staging` + 別Supabase project で作る（鍵・DB・cronを環境ごとに分離）。代替: このprojectの Preview 環境を Staging とし、Preview専用env + 別Supabaseを使う（cronはProductionでしか走らないため手動確認が必要、§2.2）。
 4. **Node.js を 22.x に固定**（CIと一致）— または CI に 24.x を追加して検証してから24を維持。どちらも設定変更なので要承認。
@@ -66,3 +66,15 @@ GitHub Actions: main の f15bb55 push run 38777543463 は **success**（直前2�
 6. **env を環境ごとに設定**（§2.3 の全19変数。秘密は Sensitive、HMAC/CRON鍵は環境ごとに独立生成、flagsは全false）。`APP_ORIGIN` は実際に配信するHTTPS origin（例 `https://fortune-journal-mcp.vercel.app` またはcustom domain）と一致させ、Supabase Site URL/Redirect URL も同じにする。`NEXT_PUBLIC_*` はbuild時埋め込みなので**env設定後に再deploy**が必要。
 7. **再deploy後のsmoke**（保護下では `vercel curl` かProtection Bypass for Automationを一時使用）: `/api/health` 200、`POST /api/mcp` 無トークン 401 + `resource_metadata=APP_ORIGIN/.well-known/oauth-protected-resource`、PRM 200、`/login` 200、`/api/ops` 503、webhook 501、cron（Bearer CRON_SECRET）200。その後 §5 のStaging E2E。
 8. 公開（scopeをStandardへ戻す）は P1 gate（実Google/実ホストOAuth E2E、Sheets手動E2E、法務文書、advisors）を満たしてから別承認。
+
+## 変更記録（オーナー承認済みの書込み）
+
+### 2026-10-16 10:35 JST（01:35:41Z）— Deployment Protection scope: Standard → All Deployments
+
+- 承認: オーナーがチャットで「change fortune-journal-mcp Deployment Protection scope from Standard to All Deployments (Vercel Authentication). Nothing else.」と明示承認。
+- 変更: `vercel api /v9/projects/prj_1ruiiZXngm2W1L4szl9oUC6L1X4R -X PATCH`、body `{"ssoProtection":{"deploymentType":"all"}}`（OpenAPIのenum `all` = All Deployments）。変更前 `all_except_custom_domains`。
+- 他は変更していない（再GETで確認）: password/trusted IPs なし、env 0件、Node 24.x、Production branch `main`、cron定義そのまま、deployなし。
+- 確認（無認証curl）: 本番ドメイン `GET /api/health`・`/api/mcp`・`/login`・PRM → **302**（`Location: https://vercel.com/sso-api?...`）、`POST /api/mcp` → **401**（Vercel SSOの応答、`_vercel_sso_nonce` cookie。アプリの `WWW-Authenticate` ではない）。外部への500露出は停止。
+- 未確認: Vercel cron（毎時 :15）が保護下でどう扱われるか。次回実行後に `vercel logs --environment production` で確認する（未設定なのでどのみち503）。
+- ロールバック: 同じPATCHで `{"ssoProtection":{"deploymentType":"all_except_custom_domains"}}`。
+- 影響: env設定後のsmoke・MCP Inspector等の外部アクセスは、`vercel curl` か Protection Bypass for Automation（テスト時のみ、要承認）が必要。公開時は再度scope変更の承認が要る（計画 8）。

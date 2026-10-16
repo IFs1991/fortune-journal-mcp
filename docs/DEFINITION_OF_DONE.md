@@ -92,7 +92,7 @@
 | Gate | 判定 |
 |---|---|
 | ローカル Deploy-Ready（コード・migration・テスト・runbook） | **GO** |
-| Vercel Production `fortune-journal-mcp`（mainから自動deploy済み） | **未設定・非公開化の判断待ち**（env 0件で `/api/mcp` 500。保護範囲All Deployments化・Production branch・Node版・env はいずれも要承認。08適用済みDBが前提） |
+| Vercel Production `fortune-journal-mcp`（mainから自動deploy済み） | **未設定・非公開**（2026-10-16 保護範囲をAll Deploymentsへ変更済み＝全URLがVercelログイン必須。env 0件のためアプリは未稼働。Production branch・Node版・env は要承認。08適用済みDBが前提） |
 | Staging 構築・デプロイ | **承認待ち**（Supabase project・Staging用Vercel project（または既存projectのPreview環境）の作成、Google OAuth client、env、`db push`、Preview deploy） |
 | P0 非公開運営テスト（Threads） | NO-GO（Meta権限・API版・通知先） |
 | P1 無料公開 | NO-GO（実Google/実ホストOAuth E2E、Sheets手動E2E、法務文書、Staging advisors） |

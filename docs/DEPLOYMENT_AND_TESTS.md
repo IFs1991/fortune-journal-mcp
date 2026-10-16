@@ -54,7 +54,7 @@ E2Eスクリプトはloopback以外を拒否し、トークン/鍵を表示し�
 
 ### 2.2 Vercel（新規・専用project）
 
-2026-10-16 のread-only監査（[verification/vercel_audit_2026-10-16.md](../verification/vercel_audit_2026-10-16.md)）: GitHub連携済みの Vercel project **`fortune-journal-mcp`** が存在し、**Production branch = `main`（マージで自動Production deploy）**、env 0件、Node.js 24.x、Deployment Protection = Standard（本番ドメイン公開）。このリポジトリの `.vercel/` は同projectにlink済み。Staging用projectは存在しない（既存の `uranai` 等を名前から流用しない。関連性はオーナーが判断）。下表は Staging 用の計画値で、既存projectとの差（Node版・保護範囲・Production branch）の扱いは監査ファイルの修正計画を参照。
+2026-10-16 のread-only監査（[verification/vercel_audit_2026-10-16.md](../verification/vercel_audit_2026-10-16.md)）: GitHub連携済みの Vercel project **`fortune-journal-mcp`** が存在し、**Production branch = `main`（マージで自動Production deploy）**、env 0件、Node.js 24.x、Deployment Protection = Standard（本番ドメイン公開）→ 同日オーナー承認で **All Deployments** に変更（全URLがVercelログイン必須。外部からのsmokeは `vercel curl` かテスト時のみのProtection Bypass）。このリポジトリの `.vercel/` は同projectにlink済み。Staging用projectは存在しない（既存の `uranai` 等を名前から流用しない。関連性はオーナーが判断）。下表は Staging 用の計画値で、既存projectとの差（Node版・保護範囲・Production branch）の扱いは監査ファイルの修正計画を参照。
 
 | 項目 | 設定 |
 |---|---|

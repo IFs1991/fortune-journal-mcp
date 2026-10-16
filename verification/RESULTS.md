@@ -48,10 +48,10 @@ E2Eの内訳（両モード共通）: Google以外のログイン拒否（signup
 - Supabase（CLIログイン済み）: projectは `seikotsuin-management`、`tiramisu-works-studio`（ACTIVE）、`exbition-meeting-manager`（INACTIVE）のみ。**Fortune Journal用projectなし**。どれもlink・変更していない。
 - Vercel（CLIログイン済み、team「Toshu's projects」）: Fortune Journal名のprojectなし。`uranai` というprojectがあるが、名前からの推測で対象にしない。
 - 2026-10-15 追記（本ブランチ）: PR #1 のpushで、GitHub連携済みのVercel project `fortune-journal-mcp`（team「Toshu's projects」）がPreview deploymentを自動作成し、PRのchecksに `Vercel: pass` が出た。これはリポジトリ側の既存Git連携によるもので、このセッションではVercel設定・env・deployを操作していない。上記「Fortune Journal名のprojectなし」は現時点では当てはまらない。
-- 2026-10-16 追記（read-only監査、[vercel_audit_2026-10-16.md](vercel_audit_2026-10-16.md)）: PR #1 のマージ（f15bb55、オーナー承認済み）で `fortune-journal-mcp`（`prj_1ruiiZXngm2W1L4szl9oUC6L1X4R`、Pro）が **Production** に自動deployされた。Production branch = `main`、Node.js 24.x、`iad1`、Deployment Protection = Standard（本番ドメインは公開）、cron毎時登録済み、**env 0件**。`/api/mcp` は 401 ではなく 500（`APP_ORIGIN` 未設定）。Supabase projectは依然 3件のみでFortune Journal用はない。設定・env・deployは変更していない。
+- 2026-10-16 追記（read-only監査、[vercel_audit_2026-10-16.md](vercel_audit_2026-10-16.md)）: PR #1 のマージ（f15bb55、オーナー承認済み）で `fortune-journal-mcp`（`prj_1ruiiZXngm2W1L4szl9oUC6L1X4R`、Pro）が **Production** に自動deployされた。Production branch = `main`、Node.js 24.x、`iad1`、Deployment Protection = Standard（本番ドメインは公開）、cron毎時登録済み、**env 0件**。`/api/mcp` は 401 ではなく 500（`APP_ORIGIN` 未設定）。Supabase projectは依然 3件のみでFortune Journal用はない。監査自体は書込みなし。その後オーナー承認により Deployment Protection の scope のみ **All Deployments** に変更（2026-10-16 10:35 JST、本番ドメインも302/401を確認。変更記録は監査ファイル末尾）。env・deployは変更していない。
 - 副作用の申告: `vercel projects ls`（10-15）と `vercel project inspect`（10-16）の実行時にVercel CLIが自身のClaude pluginを自動更新した（CLIの挙動。プロジェクトやデプロイへの変更ではない）。
 - ローカルDocker: 他プロジェクトのSupabase stack（Tiramisu等）が稼働中。停止・削除・network変更はしていない。本プロジェクトは専用network `fj_local_net`（10.253.17.0/24）を新規作成して使用。
 
 ## 公開前の順番
 
-Production `fortune-journal-mcp` の保護範囲をAll Deploymentsへ（承認）→ Staging作成の承認 → Supabase専用project + Auth設定（Googleのみ、OAuth Server、非対称鍵）→ `db dump` → `db push --dry-run` → 承認 → `db push` → advisors → Vercel専用project + env → Preview deploy（承認）→ Staging E2E（実Google・Claude/ChatGPT・MCP Inspector・Sheets手動）→ P1判定。Meta・決済は別gate。
+Production `fortune-journal-mcp` の保護範囲をAll Deploymentsへ（**済** 2026-10-16）→ Staging作成の承認 → Supabase専用project + Auth設定（Googleのみ、OAuth Server、非対称鍵）→ `db dump` → `db push --dry-run` → 承認 → `db push` → advisors → Vercel専用project + env → Preview deploy（承認）→ Staging E2E（実Google・Claude/ChatGPT・MCP Inspector・Sheets手動）→ P1判定。Meta・決済は別gate。

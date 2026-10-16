@@ -19,7 +19,7 @@ draw_tarot / get_access_status は Auth 1 + DB 1、期限切れトークンはAu
 
 - Vercel project `fortune-journal-mcp`（team「Toshu's projects」、Pro）が GitHub に連携済みで、Production branch = `main`。**mainへのマージはそのままProduction deployになる**。f15bb55 は Production に READY（オーナー承認のうえで受け入れ）。
 - 環境変数は**全環境0件**。どのSupabase projectにも接続していない。`/api/health` 200 だが、`/api/mcp`・PRM・`/login` は **500**（`APP_ORIGIN` / Supabase public env 未設定、fail-closed でデータ露出なし）。cron は毎時503（`FJ_CRON_NOT_CONFIGURED`）。
-- Deployment Protection は Standard（本番ドメイン `fortune-journal-mcp.vercel.app` は公開）。Node.js 24.x（runbook/CIは22.x）、region `iad1`。
+- Deployment Protection は 2026-10-16 10:35 JST にオーナー承認のうえ **All Deployments**（Vercel Authentication）へ変更済み。本番ドメインも含め全URLがVercelログイン必須（無認証は302/401）。Node.js 24.x（runbook/CIは22.x）、region `iad1`。
 - 保護強化・Production branch・Node・env・Supabase作成の修正計画は監査ファイル末尾。いずれも未実施・要承認。
 
 ## ブロックしているもの
@@ -28,7 +28,7 @@ draw_tarot / get_access_status は Auth 1 + DB 1、期限切れトークンはAu
 - 実Googleログイン、ChatGPT/Claude実ホスト接続、顧客Google Sheets手動E2E、Staging advisors。
 - Meta Threads実API（権限・API版未確認）、通知先（log drain/alert）。
 - 決済事業者・署名検証・法務文書（webhookは501のまま）。
-- Vercel `fortune-journal-mcp` の env・保護範囲・Production branch・Node版の決定（オーナー承認待ち）。
+- Vercel `fortune-journal-mcp` の env・Production branch・Node版の決定（オーナー承認待ち）。保護範囲はAll Deploymentsへ変更済み。
 
 ## 暗黙の完了扱いを禁止
 
