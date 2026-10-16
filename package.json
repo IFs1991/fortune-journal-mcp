@@ -19,7 +19,7 @@
     "ops": "node --experimental-strip-types scripts/ops.mjs",
     "release:check": "npm run check && npm run test:db && npm run db:schema:check && npm audit --audit-level=high",
     "start": "next start",
-    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "test": "node --experimental-strip-types --import ./tests/support/register.mjs --test tests/*.test.mjs",
     "test:db": "bash scripts/test-db.sh",
     "test:db:supabase": "bash scripts/test-supabase-local.sh",
     "test:e2e:local": "node --experimental-strip-types scripts/e2e-local.mjs --out verification/e2e_local.json",

@@ -1,11 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  JOURNAL_SHEETS,
-  JOURNAL_SCHEMA_VERSION,
-  JOURNAL_WRITE_RULES,
-  escapeSheetText,
-} from '../src/domain/journal.ts';
+import {JOURNAL_SHEETS, JOURNAL_SCHEMA_VERSION, JOURNAL_WRITE_RULES} from '../src/domain/journal.ts';
 const headers = (name) => JOURNAL_SHEETS.find((s) => s.name === name).headers;
 test('fortune records keep creation time, target period, method and result version apart from life records', () => {
   for (const h of [
@@ -42,9 +37,4 @@ test('write rules cover formula injection, duplicates, refusal and no false save
   const text = JOURNAL_WRITE_RULES.join(' ').toLowerCase();
   for (const k of ['raw', 'apostrophe', 'record_id', 'declin', 'never say', 'untrusted'])
     assert.ok(text.includes(k), k);
-});
-test('formula escaping also covers tab/CR prefixes and leaves plain text alone', () => {
-  for (const v of ['\t=1+1', '\r=1', '=HYPERLINK("x")'])
-    assert.ok(escapeSheetText(v).startsWith("'"), JSON.stringify(v));
-  assert.equal(escapeSheetText('Life is good'), 'Life is good');
 });

@@ -76,10 +76,14 @@ export function normalizeAccountMetrics(payload: unknown, since: Date, until: Da
   }
   return rows;
 }
-export function dueAges(publishedAt: string, now: Date, existing: number[]): number[] {
+const SNAPSHOT_AGES = [24, 72, 168] as const;
+export type SnapshotAge = (typeof SNAPSHOT_AGES)[number];
+
+/** Scheduled snapshot ages that are due now: within 2 hours after the target age and not taken yet. */
+export function dueAges(publishedAt: string, now: Date, existing: number[]): SnapshotAge[] {
   const age = (+now - Date.parse(publishedAt)) / 3600000;
   if (!Number.isFinite(age)) throw new Error('INVALID_PUBLISHED_AT');
-  return [24, 72, 168].filter((h) => age >= h && age <= h + 2 && !existing.includes(h));
+  return SNAPSHOT_AGES.filter((hours) => age >= hours && age <= hours + 2 && !existing.includes(hours));
 }
 export function importedPost(
   value: unknown,

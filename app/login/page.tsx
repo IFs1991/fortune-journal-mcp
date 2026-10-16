@@ -1,27 +1,25 @@
 import GoogleButton from './google-button';
-import {serverSupabase, adminSupabase} from '@/src/lib/supabase/server';
-import {safeNextPath} from '@/src/lib/urls';
+import {loadPreferences} from '@/src/account';
 import {readReferral} from '@/src/domain/security';
+import {serverSupabase} from '@/src/lib/supabase/server';
+import {safeNextPath} from '@/src/lib/urls';
+
 export default async function Login({
   searchParams,
 }: {
   searchParams: Promise<{next?: string; ref?: string; connections?: string}>;
 }) {
-  const params = await searchParams,
-    next = safeNextPath(params.next);
+  const params = await searchParams;
+  const next = safeNextPath(params.next);
   const ref = readReferral(process.env.ATTRIBUTION_HMAC_KEY, params.ref) ? params.ref : undefined;
   const supabase = await serverSupabase();
   const {
     data: {user},
   } = await supabase.auth.getUser();
-  const prefs = user
-    ? await adminSupabase()
-        .from('user_access')
-        .select('analytics_consent_at,interest_consent_at')
-        .eq('user_id', user.id)
-        .maybeSingle()
-    : null;
-  const grants = user ? await supabase.auth.oauth.listGrants() : null;
+  // Independent reads: run them together. prefs === null means it could not be loaded (never inferred).
+  const [prefs, grants] = user
+    ? await Promise.all([loadPreferences(user.id), supabase.auth.oauth.listGrants()])
+    : [null, null];
   return (
     <main className="stack">
       <div>
@@ -44,27 +42,17 @@ export default async function Login({
               Withdrawal deletes optional events and ratings and clears saved topics; operational quota
               metadata remains for up to 90 days.
             </p>
-            {prefs?.error ? (
+            {user && !prefs ? (
               <p>Preferences could not be loaded. Please retry; no choice has been inferred.</p>
             ) : (
               <form method="POST" action="/api/account/preferences" className="stack">
                 {ref ? <input type="hidden" name="ref" value={ref} /> : null}
                 <label>
-                  <input
-                    type="checkbox"
-                    name="analytics"
-                    value="yes"
-                    defaultChecked={!!prefs?.data?.analytics_consent_at}
-                  />{' '}
+                  <input type="checkbox" name="analytics" value="yes" defaultChecked={!!prefs?.analytics} />{' '}
                   Share optional usage events and explicit fixed-label feedback
                 </label>
                 <label>
-                  <input
-                    type="checkbox"
-                    name="interests"
-                    value="yes"
-                    defaultChecked={!!prefs?.data?.interest_consent_at}
-                  />{' '}
+                  <input type="checkbox" name="interests" value="yes" defaultChecked={!!prefs?.interests} />{' '}
                   Also store the themes I explicitly choose (love, work, money, general)
                 </label>
                 <label>

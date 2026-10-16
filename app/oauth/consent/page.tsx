@@ -1,6 +1,6 @@
 import {redirect} from 'next/navigation';
 import {serverSupabase} from '@/src/lib/supabase/server';
-import {platformForClient} from '@/src/lib/telemetry';
+import {clientPlatform} from '@/src/lib/env';
 
 export default async function OAuthConsent({
   searchParams,
@@ -21,7 +21,7 @@ export default async function OAuthConsent({
   if (error || !details) return <main>Connection request expired or invalid.</main>;
   if (!('authorization_id' in details)) redirect(details.redirect_url);
   // Dynamically registered clients choose their own name; only operator-listed client IDs are shown as verified.
-  const verified = platformForClient(details.client.id) !== 'unknown';
+  const verified = clientPlatform(details.client.id) !== 'unknown';
   let callbackHost = details.redirect_uri;
   try {
     callbackHost = new URL(details.redirect_uri).host;

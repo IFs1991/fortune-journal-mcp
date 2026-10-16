@@ -1,9 +1,4 @@
-import {
-  insightEntries,
-  normalizePostMetrics,
-  normalizeAccountMetrics,
-  importedPost,
-} from '../domain/threads.ts';
+import {normalizePostMetrics, normalizeAccountMetrics, importedPost} from '../domain/threads.ts';
 export type ThreadsConfig = {accountId: string; accessToken: string; apiVersion: string};
 /** Fixed host/path construction. Never follow an API-provided next URL or accept a user URL. */
 export class ThreadsClient {

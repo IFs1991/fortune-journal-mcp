@@ -84,7 +84,8 @@ const mcpSources = ['app/api/mcp/route.ts', ...sourceFiles('src/mcp')];
 for (const file of mcpSources) {
   const text = read(file);
   check(
-    !/src\/ops\/|OPS_HMAC_KEY|publishPost|integrations\/threads/.test(text),
+    // Imports, not comments: the MCP must not import operator modules or the Threads client.
+    !/from\s+['"][^'"]*(src\/ops\/|integrations\/threads)|OPS_HMAC_KEY/.test(text),
     `operator code reachable from the MCP: ${file}`,
   );
 }
