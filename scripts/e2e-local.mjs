@@ -36,6 +36,14 @@ async function step(name, fn) {
     console.log('FAIL', name, '-', String(e?.message ?? e).slice(0, 300));
   }
 }
+/** Usage units consumed = ledger rows (supabase/migrations: one user_readings row per unit). */
+const usage = async (userId, filter = {}) => {
+  let query = admin.from('user_readings').select('id', {count: 'exact', head: true}).eq('user_id', userId);
+  for (const [column, value] of Object.entries(filter)) query = query.eq(column, value);
+  const {count, error} = await query;
+  if (error) throw error;
+  return count;
+};
 const ok = (cond, msg) => {
   if (!cond) throw new Error(msg);
 };
@@ -234,7 +242,6 @@ try {
     for (const t of [
       'user_access',
       'subscriptions',
-      'usage_counters',
       'billing_events',
       'fortune_posts',
       'automation_runs',
@@ -483,8 +490,7 @@ try {
         ).error === 'IDEMPOTENCY_CONFLICT',
         'conflict not rejected',
       );
-      const {data: counters} = await admin.from('usage_counters').select('used_count').eq('user_id', A.id);
-      ok(counters.reduce((s, c) => s + c.used_count, 0) === 1, 'retry consumed quota twice');
+      ok((await usage(A.id)) === 1, 'retry consumed quota twice');
       const {data: ledger} = await admin.from('user_readings').select('*').eq('user_id', A.id);
       ok(
         ledger.length === 1 && !JSON.stringify(ledger).includes('1991-09-12'),
@@ -514,17 +520,14 @@ try {
       .update({target_date: yesterday})
       .eq('id', first.readingId);
     ok(!error, 'fixture update');
-    const {data: before} = await admin.from('usage_counters').select('used_count').eq('user_id', A.id);
+    const before = await usage(A.id);
     const again = await tool(accessA.access_token, 'draw_tarot', {count: 1, drawId});
-    const {data: after} = await admin.from('usage_counters').select('used_count').eq('user_id', A.id);
+    const after = await usage(A.id);
     ok(
       again.replayed === true && JSON.stringify(again.cards) === JSON.stringify(first.cards),
       'cross-day retry not replayed',
     );
-    ok(
-      before.reduce((n, c) => n + c.used_count, 0) === after.reduce((n, c) => n + c.used_count, 0),
-      'cross-day retry consumed quota',
-    );
+    ok(before === after, 'cross-day retry consumed quota');
   });
 
   await step(
@@ -538,7 +541,7 @@ try {
         })
         .eq('user_id', A.id);
       ok(!error, 'fixture update');
-      await admin.from('usage_counters').delete().eq('user_id', A.id);
+      // Trial-time readings stay in the ledger but count only against the trial tier.
       ok((await tool(accessA.access_token, 'get_access_status')).tier === 'free', 'expired trial not free');
       ok(
         (await tool(accessA.access_token, 'draw_tarot', {count: 1})).error === 'FEATURE_NOT_INCLUDED',
@@ -557,8 +560,7 @@ try {
           'IDEMPOTENCY_CONFLICT',
         'post-trial retry with a different count accepted',
       );
-      const {data: afterReplay} = await admin.from('usage_counters').select('used_count').eq('user_id', A.id);
-      ok(afterReplay.length === 0, 'post-trial replay consumed usage');
+      ok((await usage(A.id, {tier_at_use: 'free'})) === 0, 'post-trial replay consumed usage');
       const remaining = [];
       for (let i = 0; i < 3; i++)
         remaining.push(
@@ -761,21 +763,19 @@ try {
       },
     );
 
-  await step('Data API: user A sees only own rows, cannot escalate; B cannot see A', async () => {
-    const a = userClient(A.session),
-      b = userClient(B.session);
-    const {data: own} = await a.from('user_access').select('user_id,trial_ends_at');
-    ok(own?.length === 1 && own[0].user_id === A.id, 'A cannot read own access row');
-    const {data: readsB} = await b.from('user_readings').select('id,user_id');
-    ok(
-      (readsB ?? []).every((r) => r.user_id === B.id),
-      "B reads another user's readings",
-    );
-    const {data: aViaB} = await b.from('user_readings').select('id').eq('user_id', A.id);
-    ok((aViaB ?? []).length === 0, 'B reads A readings');
-    const {data: aOwn} = await a.from('user_readings').select('id');
-    ok((aOwn ?? []).length > 0, 'A cannot read own readings (vacuous isolation test)');
-    ok((await a.from('user_readings').select('request_fingerprint')).error, 'fingerprint column readable');
+  await step('Data API: signed-in users can read or change nothing directly (app-only access)', async () => {
+    const a = userClient(A.session);
+    for (const t of [
+      'user_access',
+      'subscriptions',
+      'user_readings',
+      'reading_feedback',
+      'funnel_events',
+      'billing_events',
+    ]) {
+      const {data, error} = await a.from(t).select('*').limit(1);
+      ok(error || !data?.length, `signed-in user read ${t} through the Data API`);
+    }
     ok(
       (
         await a
@@ -786,7 +786,7 @@ try {
       ).error,
       'A extended own trial',
     );
-    ok((await a.from('usage_counters').delete().eq('user_id', A.id).select()).error, 'A reset quota');
+    ok((await a.from('user_readings').delete().eq('user_id', A.id).select()).error, 'A reset own usage');
     ok(
       (
         await a.from('subscriptions').insert({
@@ -823,7 +823,7 @@ try {
       ).error,
       'A changed B consent',
     );
-    ok((await a.from('billing_events').select('*').limit(1)).error, 'A read billing events');
+    ok((await a.rpc('fj_access_status', {p_user_id: B.id})).error, 'A read B access status');
   });
 
   await step('Export: own data only, paged, no fingerprint; requires a session', async () => {
@@ -1024,13 +1024,8 @@ try {
         draws.filter((d) => d.replayed === false).length === 1,
         `fresh draws ${draws.filter((d) => d.replayed === false).length}`,
       );
-      const {data: c} = await admin
-        .from('usage_counters')
-        .select('used_count')
-        .eq('user_id', D.id)
-        .eq('feature_key', 'draw_tarot');
       ok(
-        c.reduce((n, x) => n + x.used_count, 0) === 1,
+        (await usage(D.id, {feature_key: 'draw_tarot'})) === 1,
         'parallel identical draws consumed more than one unit',
       );
       ok((await tool(conn.access_token, 'get_access_status')).tier === 'trial', 'access status');
