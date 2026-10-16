@@ -58,11 +58,11 @@ END $$;
 
 -- Behavioural confirmation of the catalog: client roles are refused at the privilege layer.
 SET LOCAL ROLE authenticated;
-SELECT set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111', true);
 DO $$
 DECLARE
   rel text;
 BEGIN
+  PERFORM set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111', true);
   FOR rel IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
              WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v') LOOP
     BEGIN

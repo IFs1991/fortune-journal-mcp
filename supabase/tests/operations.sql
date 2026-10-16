@@ -135,7 +135,7 @@ BEGIN
     IF SQLERRM <> 'INVALID_COHORT_WINDOW' THEN RAISE; END IF;
   END;
 
-  r := public.fj_operation_report(now() - interval '1 day', now());
+  r := public.fj_operation_report(now() - interval '1 day', now() + interval '1 minute');
   IF r->>'caveat' NOT LIKE 'Missing cost is unobserved%' OR jsonb_array_length(r->'tasks') = 0 THEN RAISE EXCEPTION 'operation report: %', r; END IF;
 END $$;
 
