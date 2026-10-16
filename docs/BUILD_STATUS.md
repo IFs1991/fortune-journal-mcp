@@ -1,4 +1,4 @@
-# Build status — v0.2.1 (Deploy-Ready locally, Staging not created)
+# Build status — v0.2.1 (Deploy-Ready locally; Vercel Production auto-deployed but unconfigured; Staging not created)
 
 本番公開済み製品ではない。実行した検証は [../verification/RESULTS.md](../verification/RESULTS.md)、判定は [DEFINITION_OF_DONE.md](DEFINITION_OF_DONE.md)。
 
@@ -11,17 +11,24 @@
 - ローカルSupabase stack（GoTrue OAuth 2.1 + PostgREST）とこのappでのE2E: Google以外のログイン拒否、Data API RLS（anon/A/B）、DCR+PKCE+同意/拒否、MCP（7ツール、2025/2026両プロトコル）、Trial/Free/quota/冪等性/日付越えtarot、refresh、revoke、アカウント削除、export、任意計測の同意/撤回、cron、署名付きops。
 - `supabase db advisors`（local）WARN/ERROR 0。
 
-## 未リリース変更（MCP通信最適化）
+## MCP通信最適化（PR #1、main f15bb55 にマージ済み）
 
-draw_tarot / get_access_status は Auth 1 + DB 1、期限切れトークンはAuth呼出しなしで401、計測イベントは応答後。Authは毎回 `getUser()` を維持。ローカル実測と判断は [PERFORMANCE.md](PERFORMANCE.md)。migration 08 はアプリより先に適用する。
+draw_tarot / get_access_status は Auth 1 + DB 1、期限切れトークンはAuth呼出しなしで401、計測イベントは応答後。Authは毎回 `getUser()` を維持。ローカル実測と判断は [PERFORMANCE.md](PERFORMANCE.md)。**migration 08 はアプリより先に対象DBへ適用する**（現時点でFortune Journal用のリモートDBは存在しない）。
+
+## Vercel Production（2026-10-16 監査、[verification/vercel_audit_2026-10-16.md](../verification/vercel_audit_2026-10-16.md)）
+
+- Vercel project `fortune-journal-mcp`（team「Toshu's projects」、Pro）が GitHub に連携済みで、Production branch = `main`。**mainへのマージはそのままProduction deployになる**。f15bb55 は Production に READY（オーナー承認のうえで受け入れ）。
+- 環境変数は**全環境0件**。どのSupabase projectにも接続していない。`/api/health` 200 だが、`/api/mcp`・PRM・`/login` は **500**（`APP_ORIGIN` / Supabase public env 未設定、fail-closed でデータ露出なし）。cron は毎時503（`FJ_CRON_NOT_CONFIGURED`）。
+- Deployment Protection は 2026-10-16 10:35 JST にオーナー承認のうえ **All Deployments**（Vercel Authentication）へ変更済み。本番ドメインも含め全URLがVercelログイン必須（無認証は302/401）。Node.js 24.x（runbook/CIは22.x）、region `iad1`。
+- 保護強化・Production branch・Node・env・Supabase作成の修正計画は監査ファイル末尾。いずれも未実施・要承認。
 
 ## ブロックしているもの
 
-- Staging用Supabase project / Vercel project / Google OAuth clientが**存在しない**（read-only確認済み）。作成・`db push`・deployは承認待ち。
+- Staging用Supabase project / Staging用Vercel project / Google OAuth clientが**存在しない**（read-only確認済み、2026-10-16）。作成・`db push`・env設定・deployは承認待ち。Production用Vercel project `fortune-journal-mcp` は存在するが未設定（上記）。
 - 実Googleログイン、ChatGPT/Claude実ホスト接続、顧客Google Sheets手動E2E、Staging advisors。
 - Meta Threads実API（権限・API版未確認）、通知先（log drain/alert）。
 - 決済事業者・署名検証・法務文書（webhookは501のまま）。
-- CI: mainの直近runは e2e の `.ts` import（Node 22.16）でFAIL。修正はPR #1で全job PASS（未マージ）。
+- Vercel `fortune-journal-mcp` の env・Production branch・Node版の決定（オーナー承認待ち）。保護範囲はAll Deploymentsへ変更済み。
 
 ## 暗黙の完了扱いを禁止
 

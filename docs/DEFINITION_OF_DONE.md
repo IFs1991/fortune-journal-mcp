@@ -23,8 +23,9 @@
 | full TypeScript | PASS | `typecheck.log` |
 | Next production build | PASS | `production_build.log`（env未設定でも成功） |
 | Node runtime smoke（`next start`） | PASS | `e2e_local*.json`（local） |
-| Vercel runtime smoke | BLOCKED | Vercel project未作成（作成は要承認） |
-| PR CI（unit / database / build / supabase-local） | PASS | PR #1（run 38693864153）。mainの直近runは e2e の `.ts` import でFAIL→修正済み |
+| Vercel build / deploy（Git連携、Production `fortune-journal-mcp`） | PASS | `vercel_audit_2026-10-16.md`（f15bb55 → `dpl_DKrX…` READY、Next.js、Node 24.x、`iad1`） |
+| Vercel runtime smoke（`/api/mcp` 無トークン401、PRM、`/login`） | BLOCKED | 同上。env全環境0件のため500（`APP_ORIGIN`/Supabase未設定、fail-closed）。`/api/health` のみ200。Supabase project作成とenv設定が前提（要承認） |
+| PR CI（unit / database / build / supabase-local） | PASS | PR #1（run 38693864153）、マージ後の main f15bb55（run 38777543463 success） |
 | 第三者Action pin | PASS | checkout v4.2.2 / setup-node v4.4.0 / supabase/setup-cli v3.0.1 をGitHub tag refと照合 |
 
 ## G2 Database（release blocker）
@@ -91,7 +92,8 @@
 | Gate | 判定 |
 |---|---|
 | ローカル Deploy-Ready（コード・migration・テスト・runbook） | **GO** |
-| Staging 構築・デプロイ | **承認待ち**（Supabase/Vercel project新規作成、Google OAuth client、env、`db push`、Preview deploy） |
+| Vercel Production `fortune-journal-mcp`（mainから自動deploy済み） | **未設定・非公開**（2026-10-16 保護範囲をAll Deploymentsへ変更済み＝全URLがVercelログイン必須。env 0件のためアプリは未稼働。Production branch・Node版・env は要承認。08適用済みDBが前提） |
+| Staging 構築・デプロイ | **承認待ち**（Supabase project・Staging用Vercel project（または既存projectのPreview環境）の作成、Google OAuth client、env、`db push`、Preview deploy） |
 | P0 非公開運営テスト（Threads） | NO-GO（Meta権限・API版・通知先） |
 | P1 無料公開 | NO-GO（実Google/実ホストOAuth E2E、Sheets手動E2E、法務文書、Staging advisors） |
 | P2 課金公開 | NO-GO（決済事業者・署名・法務） |
