@@ -1,99 +1,85 @@
-# Definition of Done — v0.2.1
+# Definition of Done and current status — v0.3.1
 
-**状態は証拠のあるものだけPASS。テストファイルの存在はテスト合格ではない。** 証拠の正本は [verification/RESULTS.md](../verification/RESULTS.md) と同ディレクトリのログ（`results.json` に command / exit code / 時刻 / 環境）。
-状態: **PASS**（実行して合格）/ **FAIL**（実行して不合格）/ **BLOCKED**（外部前提が未整備で実行不能）/ **NOT RUN**（実行可能だが未実行）。
-「local」はこのWindows開発機のSupabase CLI 2.120.0ローカルstack（実Supabase Postgres 17.6.1イメージ + GoTrue OAuth 2.1 + PostgREST）、「PG」は使い捨て `postgres:17`（digest固定）。
+**PASS は実行して合格したものだけ。** FAIL（実行して不合格）/ BLOCKED（外部前提がなく実行不能）/ NOT RUN（実行可能だが未実行）。証拠の正本は [verification/RESULTS.md](../verification/RESULTS.md)（command・exit code・時刻・対象commit）と `verification/local/`、修正前の再現は `verification/before_fix/`。
+「local」= Supabase CLI 2.120.0 のローカルstack（Supabase Postgres 17 + GoTrue OAuth 2.1 + PostgREST）、「PG」= 使い捨て `postgres:17`（digest固定）。検証は `npm run verify:local` を Node 24 / 22 で実行（GitHub Actionsは受入れ基準にしない）。
 
-## G0 Source delivery
+## 現在地（2026-10-17）
 
-| 項目 | 状態 | 証拠 |
-|---|---|---|
-| 旧 `20261014000100_initial_schema.sql` 非改変（sha256 `6e2155b0…`） | PASS | `migration_prepare.log`, `static.log` |
-| P0/P1/P2データ境界、11表の制約/索引/RLS/GRANT | PASS | `db.log`, `supabase_local_sql.log` |
-| 顧客MCPと運営APIの分離、任意同意と関心同意、export/revoke | PASS | `e2e_local*.json` |
-| 出生/日誌/Google token/自由文を保存しない | PASS | static禁止列検査 + E2E（台帳・exportに出生日なし） |
+- PR #3（`fd57d5e`）をベースに P0（認証境界・audience・redirect・MCP Origin）、P1（課金整合性・maintenance・Threads）を修正し、ローカルで全件PASS（Node 24・22）。
+- Staging未作成。リモートへの書込み・デプロイ・投稿・課金は行っていない。Vercel Production `fortune-journal-mcp` は main から自動deployされるが env 0件・全URL保護（2026-10-16 監査）。
+- DBは1本のbaseline（リモート未適用なので編集可）。
 
-## G1 Dependency / build（release blocker）
+## G1 Build / dependencies
 
 | 項目 | 状態 | 証拠 |
 |---|---|---|
-| 全pinが公式registryに実在、peer互換 | PASS | `npm view`（全pin実在）、`npm ls` 不整合なし（OS別optionalのみ） |
-| 脆弱性 | PASS | `audit.log` 0件（next 15.5.19→15.5.27、postcss/sharp override） |
-| 正規 `package-lock.json`、`npm ci` 再現 | PASS | `npm_ci_clean_clone.log`（fresh clone） |
-| full TypeScript | PASS | `typecheck.log` |
-| Next production build | PASS | `production_build.log`（env未設定でも成功） |
-| Node runtime smoke（`next start`） | PASS | `e2e_local*.json`（local） |
-| Vercel runtime smoke | BLOCKED | Vercel project未作成（作成は要承認） |
-| PR CI（unit / database / build / supabase-local） | PASS | PR #1（run 38693864153）。mainの直近runは e2e の `.ts` import でFAIL→修正済み |
-| 第三者Action pin | PASS | checkout v4.2.2 / setup-node v4.4.0 / supabase/setup-cli v3.0.1 をGitHub tag refと照合 |
+| `npm ci`、`npm audit --audit-level=high` 0件 | PASS（Node 24・22） | `local/node*/npm_ci.log`, `audit.log` |
+| Prettier、static contracts、full TypeScript | PASS（Node 24・22） | `format.log`, `static.log`, `typecheck.log` |
+| 単体テスト 68件 | PASS（Node 24・22） | `unit.log` |
+| Next production build | PASS（Node 24・22） | `build.log` |
+| Vercel build/deploy（Git連携） | PASS（f15bb55、2026-10-16 監査）。このブランチは NOT RUN（push後のPreviewで確認） | `vercel_audit_2026-10-16.md` |
+| Vercel runtime smoke（`scripts/smoke-remote.mjs`） | BLOCKED | env 0件・Supabase project未作成。localhostでは PASS 8/8 |
 
-## G2 Database（release blocker）
+## G2 Database
 
 | 項目 | 状態 | 証拠 |
 |---|---|---|
-| 公式CLIで5テンプレートをmigration化、`db:check-prepared` | PASS | `migration_prepare.log`, `supabase/template-lock.json` |
-| forward-fix 06/07 を manifest にhash登録、未登録migrationを拒否 | PASS | `migration_prepare.log` |
-| fresh / v0.1データ入り で全migration、旧データ保持、課金の偽verifiedなし | PASS | `db.log`（PG） |
-| 実Supabaseイメージで全migration適用 | PASS | `supabase_local_start.log`（local） |
-| anon / A / B / service_role の読取・列権限・不正更新・課金/運営RPC否認 | PASS | `db.log`, `supabase_local_sql.log`, E2E「Data API」 |
-| 同一request 10並列→1 quota（9 replay、同一readingId）、別request 10並列→Free上限3（7件 LIMIT） | PASS | `db.log` |
-| 途中失敗時の原子性（quotaだけ消費しない） | PASS | `v02_negative_edge.sql`（注入トリガー） |
-| 課金: 重複/経済キー重複/逆順/返金/チャージバック/通貨別cash・MRR/不整合リプレイ/未binding拒否 | PASS | `v02_billing.sql`, `v02_negative_edge.sql` |
-| 課金: 実署名検証 | BLOCKED | 決済事業者未確定。webhookは501 fail-closed（E2E/smoke確認） |
-| 90/400日purge、capture_key一意、FK削除cascade、同意撤回、本人export | PASS | SQLスイート + E2E（Export / Account deletion / Analytics mode） |
-| Supabase advisors / lint | PASS（local） | `supabase_advisors_local.log`（WARN/ERROR 0）、`supabase_lint_local.log` |
-| 実Staging projectのData API公開設定/権限/advisors | BLOCKED | Staging project未作成 |
-| バックアップ/復元、移行停止時間、旧アプリ互換 | NOT RUN | 手順は `DEPLOYMENT_AND_TESTS.md` §3。旧v0.1アプリとは非互換（05） |
+| baselineのfresh適用、全public objectの権限契約（hookは `supabase_auth_admin` のみ例外） | PASS（PG / local） | `db_pg17.log`, `supabase_sql.log` |
+| 計算・Trial・上限・replay・conflict・停止・原子性・並列 | PASS（PG / local） | `calculations.sql`, `db_pg17.log` |
+| 課金: 重複・経済キー（重複通知のsnapshot適用）・逆順・同時刻の全項目比較とfail closed・reconciled・支払失敗・解約予約・返金・CB・通貨別・削除後の返金記録 | PASS（PG / local） | `billing.sql` |
+| 課金の並列（同一入金20並列 → cash 1件・最新snapshot） | PASS（PG） | `db_pg17.log` |
+| 運営: 承認ハッシュ・二重claim・unknown・未公開確定の再claim・resolve・lease・試行切れの `exhausted`・KPIのNULL | PASS（PG / local） | `operations.sql` |
+| 保持期限・アカウント削除・課金bindingの非識別化 | PASS（PG / local） | `retention.sql`, `billing.sql` |
+| dump/restore、schema drift | PASS | `db_pg17.log`, `schema_drift.log` |
+| `supabase db lint` / `db advisors`（WARN以上0） | PASS（local） | `supabase_lint.log`, `supabase_advisors.log` |
+| 実Staging DBでの適用・advisors・復元 | BLOCKED | Staging未作成 |
+| 課金の実署名検証・事業者sandbox E2E | BLOCKED | 決済事業者未確定、webhook 501 |
 
-## G3 Customer / MCP（release blocker）
+## G3 Customer / MCP
 
 | 項目 | 状態 | 証拠 |
 |---|---|---|
-| Googleのみ（Email/Password/OTP/Anonymous拒否） | PASS（local） | E2E「Google-only」 |
-| 実Googleログイン | BLOCKED | Staging Google OAuth client未作成 |
-| OAuth discovery(401+RFC 9728)/DCR/PKCE/誤verifier拒否/code再利用拒否/同意/拒否/refresh/revoke/削除後401 | PASS（local GoTrue） | E2E |
-| 有効期限切れトークン拒否 | PASS（unit） | `tests/oauth.test.mjs`（exp検査）。実期限切れのE2Eは NOT RUN |
-| 同意画面: client名・callback host・未検証client警告・Origin/CSRF・他ユーザーのauthorization操作不可 | PASS（local） | E2E |
-| ChatGPT / Claude 実ホストでの接続 | BLOCKED | Stagingの公開URLが必要 |
-| MCP 2025 stateless と 2026-07-28 envelope の両方 | PASS（local） | E2E |
-| Free/Trial/Premium判定はサーバーのみ。同意・ログインでTrial開始しない | PASS | E2E + SQL |
-| 同一request再試行・別入力conflict・日付越えtarot・Free上限 | PASS（local） | E2E |
-| 顧客本人Sheets作成/追記/読み戻し・拒否・重複・式注入・他人のsheet | BLOCKED | 顧客側Googleコネクタでの手動E2E（自社MCPはGoogleに触れない）。書込みルールは `get_journal_schema.writeRules` で提供（unit/E2E PASS） |
-| MCP完了をSheets保存成功と表示しない、feedback明示選択、計測拒否でも基本機能 | PASS | E2E + tool記述 |
-| 通信: draw_tarot / get_access_status は Auth 1 + DB 1、calculate_numerology は増加なし、期限切れ401はAuth 0 | PASS（local） | Kong実測 `verification/perf/`、[PERFORMANCE.md](PERFORMANCE.md) |
-| 認証の失効即時性を維持（毎回 getUser、ローカル検証のみの受理なし） | PASS（local） | E2E revoke/削除後401、`perf/auth_probe.json` |
-| Trial終了後の同一tarot再試行・停止ユーザー拒否・MCP経由10並列で1単位 | PASS（local） | E2E + `v02_forward_fix_08.sql` + `db.log`。Trial終了後replayの仕様はオーナー承認済み（2026-10-15） |
-| ホストが事前ツール呼出しを省くか（ChatGPT/Claude/Codex） | BLOCKED | 実ホスト接続にStaging公開URLが必要 |
-| Vercel/実Supabase上の往復時間・コールドスタート | BLOCKED | Staging未作成 |
+| Googleのみ（Email/Password/OTP/Anonymous拒否） | PASS（local） | E2E |
+| OAuth discovery（401 + RFC 9728）/ DCR / PKCE / 誤verifier・code再利用拒否 / 同意・拒否 / refresh / revoke / 削除後401 | PASS（local） | E2E |
+| **MCP OAuth tokenで本人Web API（export・同意・解除・削除・ログイン画面）を操作できない**（偽造cookie・binding付き偽造・Bearerのみ・binding無し・他人のbinding） | PASS（local）。修正前はFAIL（export 200） | E2E, `before_fix/` |
+| CSRF（Origin欠落・外部Origin・cross/same-site・text/plain本文） | PASS（unit + local） | `tests/url.test.mjs`, E2E |
+| token audience: OAuth tokenは `aud=urn:fortune-journal:mcp` のみ、それ以外は401 | PASS（unit + local、hook実機） | E2E, `auth_hook.sql` |
+| RFC 8707 の AS側resource束縛 | BLOCKED（Supabase非対応: hook入力にresourceなし。project専用化で緩和） | [SECURITY.md](SECURITY.md) |
+| open redirect（30ベクタ） | PASS（unit）。修正前はFAIL | `tests/url.test.mjs`, `before_fix/` |
+| MCP Origin 403 / Host 421 / body 413 / rate limit 429 | PASS（unit + local） | E2E, `tests/rate-limit.test.mjs` |
+| 期限切れ・改ざん・ブラウザセッションtokenの401 | PASS（unit + local） | E2E |
+| tools/list 7件（名称・入出力schema不変） | PASS（local） | E2E, `check:static` |
+| Trial開始・replay・conflict・日付越えtarot・Free上限・Trial終了後・停止 | PASS（local） | E2E |
+| 本人export（fingerprint・出生日なし、他人の行なし）、任意計測の同意/撤回 | PASS（local） | E2E（ON） |
+| 実Googleログイン（binding cookieの実発行）、ChatGPT/Claude実ホスト接続、最初の鑑定のホスト表示 | BLOCKED | Staging公開URL・Google OAuth client |
+| 顧客Google Sheets | BLOCKED | 顧客側コネクタでの手動E2E |
+| Vercel/実Supabase上の往復時間 | BLOCKED | Staging未作成 |
 
-## G4 Threads P0
+## G4 Operations / Threads
 
 | 項目 | 状態 | 証拠 |
 |---|---|---|
-| 承認hash不一致で公開拒否、同時claim一つ、unknownを再公開しない（DB層） | PASS | `v02_transactions.sql` |
-| ネットワーク誤り時に公開POSTを再送しない、token をURLに載せない（client層、mock） | PASS | `tests/threads-client.test.mjs` |
-| 事業者accountのtoken権限とAPI版、pagination、24/72/168h実観測、followers | BLOCKED | Meta権限・API版未確認、全フラグOFF |
-| cron失敗/収集停止/unknown の通知先 | BLOCKED | 構造化ログ `FJ_MAINTENANCE_*` は実装・確認済み。通知先（log drain/alert）未接続 |
-| 運営費用の外部申告/推定/観測不能の分離 | PASS（DB層） | `automation_runs` 制約 + `fj_operation_report` |
+| maintenance: 試行切れ・失敗を成功扱いしない、retryable/permanent、cron 500 | PASS（unit + 実DB + local E2E）。修正前はFAIL（200 OK） | `tests/maintenance.test.mjs`, `ops_state_machines.log`, E2E |
+| Threads: success / failed / unknown、unknownの再投稿なし、記録失敗の通知、resolve_publish | PASS（実DB + 偽装Threads）。修正前はFAIL | `ops_state_machines.log`, `operations.sql` |
+| POSTを再送しない、tokenをURLに載せない | PASS（unit） | `tests/threads.test.mjs` |
+| 実API（権限・API版・実観測） | BLOCKED | Meta権限未確認、全flag OFF |
+| cron失敗・unknownの通知先 | BLOCKED | ログコードは実装済み、通知先（log drain）未接続 |
 
-## G5 Business / payments / policies
+## G5 Business / policy
 
 | 項目 | 状態 |
 |---|---|
-| プライバシー通知・同意文・保存期間・export/delete連絡先・規約の公開 | BLOCKED（法務・連絡先未確定） |
-| Threads投稿/AI表示/ホスト掲載と課金導線ポリシー | BLOCKED |
-| 決済業種承認・実adapter・解約・署名検証・照合/返金/チャージバック | BLOCKED（501維持） |
-| 更新率の母数・初回/継続区別 | PASS（SQL定義のみ、実データなし） |
-| 費用・税・手数料なしで粗利/LTVを実測と称さない | PASS（レポートcaveat） |
+| プライバシーポリシー・利用規約・問い合わせ窓口の公開 | BLOCKED（法務・連絡先未確定。必要項目は [OPERATIONS.md](OPERATIONS.md) §8） |
+| 決済（業種承認・adapter・解約・署名・照合） | BLOCKED（webhook 501、checkoutなし: `check:static`） |
+| 無料βと有料公開の機能分離 | PASS（文書化: [BILLING_PROVIDER.md](BILLING_PROVIDER.md)、Premiumは検証済みsubscriptionなしに付与されない: `billing.sql`） |
+| 粗利/LTVを実測と称さない | PASS（レポートのcaveat） |
 
-## Go / no-go
+## リリース判定
 
-| Gate | 判定 |
-|---|---|
-| ローカル Deploy-Ready（コード・migration・テスト・runbook） | **GO** |
-| Staging 構築・デプロイ | **承認待ち**（Supabase/Vercel project新規作成、Google OAuth client、env、`db push`、Preview deploy） |
-| P0 非公開運営テスト（Threads） | NO-GO（Meta権限・API版・通知先） |
-| P1 無料公開 | NO-GO（実Google/実ホストOAuth E2E、Sheets手動E2E、法務文書、Staging advisors） |
-| P2 課金公開 | NO-GO（決済事業者・署名・法務） |
+| 段階 | 判定 | 根拠 / 残条件 |
+|---|---|---|
+| **A. ローカルMVP完成**（既存機能・P0修正・全回帰テスト・ビルド） | **GO** | Node 24・22で `verify:local` 16ステップ全PASS（unit 68、PG/local SQL全スイート、ops 6、E2E 21+22）。P0 4件とP1 5件は修正前の失敗を再現済み |
+| **B. 無料限定β公開** | **BLOCKED** | 外部前提が未充足: Staging Supabase project作成・baseline適用・**Auth Hook有効化**・Google OAuth client・Vercel env（`check-env` PASS）・Firewall rate limit・Deployment Protection解除の判断（いずれも★承認）→ Stagingで実OAuth・ChatGPT/Claude接続・smoke・§3.5のE2E。法務3点と通知先も未整備。コード上の阻害要因は見つかっていない |
+| **C. 一般向け有料公開** | **NO-GO** | Bの全条件に加え、決済事業者・署名付きwebhook adapter・支払/権限反映/解約/返金のsandbox E2E・定期照合・障害時の課金照合手順が未実装（webhookは意図的に501） |
 
-課金だけ未完了なら課金を無効（501）にしたまま他gateを満たす範囲で進める。OAuth・RLS・full build の実Staging確認前に一般公開しない。
+テストが存在する→合格、ローカルE2E合格→Staging合格、MCPが計算した→Google保存成功、snapshotがない→0、という読み替えはしない。

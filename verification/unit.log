@@ -1,290 +1,335 @@
+$ npm test
+# started 2026-10-16T03:02:04Z at commit fd0d36f
 
-> fortune-journal-mcp@0.2.1 test
-> node --experimental-strip-types --test tests/*.test.mjs
+> fortune-journal-mcp@0.3.0 test
+> node --experimental-strip-types --import ./tests/support/register.mjs --test tests/*.test.mjs
 
 TAP version 13
-# Subtest: missing metrics remain null, a reported zero remains zero
-ok 1 - missing metrics remain null, a reported zero remains zero
+# Subtest: export requests accept only known resources and sane pages
+ok 1 - export requests accept only known resources and sane pages
   ---
-  duration_ms: 4.0198
+  duration_ms: 6.5525
   type: 'test'
   ...
-# Subtest: zero views, unknown components and incompatible periods do not produce a fake rate
-ok 2 - zero views, unknown components and incompatible periods do not produce a fake rate
+# Subtest: the consent version matches the format the database accepts
+ok 2 - the consent version matches the format the database accepts
   ---
-  duration_ms: 1.2639
-  type: 'test'
-  ...
-# Subtest: specified engagement formula excludes shares and is not a unique-user rate
-ok 3 - specified engagement formula excludes shares and is not a unique-user rate
-  ---
-  duration_ms: 0.504
-  type: 'test'
-  ...
-# Subtest: counters reject negatives, strings, unsafe integers, and NaN
-ok 4 - counters reject negatives, strings, unsafe integers, and NaN
-  ---
-  duration_ms: 0.5185
-  type: 'test'
-  ...
-# Subtest: followers are stocks; daily and range metrics preserve separate boundaries
-ok 5 - followers are stocks; daily and range metrics preserve separate boundaries
-  ---
-  duration_ms: 5.1242
-  type: 'test'
-  ...
-# Subtest: historical counters cannot be labeled as due 24h/72h snapshots
-ok 6 - historical counters cannot be labeled as due 24h/72h snapshots
-  ---
-  duration_ms: 3.0185
-  type: 'test'
-  ...
-# Subtest: import preserves original timestamp; skips missing text and replies
-ok 7 - import preserves original timestamp; skips missing text and replies
-  ---
-  duration_ms: 1.272
-  type: 'test'
-  ...
-# Subtest: D7 is a bounded matured window, not any return in the first week
-ok 8 - D7 is a bounded matured window, not any return in the first week
-  ---
-  duration_ms: 0.7087
-  type: 'test'
-  ...
-# Subtest: empty cohorts are unavailable, not zero percent
-ok 9 - empty cohorts are unavailable, not zero percent
-  ---
-  duration_ms: 1.6537
-  type: 'test'
-  ...
-# Subtest: cash preserves integer minor units, signs, currency and exponent
-ok 10 - cash preserves integer minor units, signs, currency and exponent
-  ---
-  duration_ms: 1.907
-  type: 'test'
-  ...
-# Subtest: normalized billing preserves amounts; rejects unsafe numbers and missing currency scale
-ok 11 - normalized billing preserves amounts; rejects unsafe numbers and missing currency scale
-  ---
-  duration_ms: 2.4651
-  type: 'test'
-  ...
-# Subtest: non-financial notifications do not count as cash
-ok 12 - non-financial notifications do not count as cash
-  ---
-  duration_ms: 0.5419
-  type: 'test'
-  ...
-# Subtest: only verified current subscription snapshots grant Premium
-ok 13 - only verified current subscription snapshots grant Premium
-  ---
-  duration_ms: 1.0924
-  type: 'test'
-  ...
-# Subtest: access snapshot RPC result resolves exactly like the former two-query read, and malformed data fails closed
-ok 14 - access snapshot RPC result resolves exactly like the former two-query read, and malformed data fails closed
-  ---
-  duration_ms: 2.0046
-  type: 'test'
-  ...
-# Subtest: ISO date parser refuses bad calendar dates and supports leap day
-ok 15 - ISO date parser refuses bad calendar dates and supports leap day
-  ---
-  duration_ms: 8.8647
-  type: 'test'
-  ...
-# Subtest: number reduction and time-dependent personal cycle deterministic
-ok 16 - number reduction and time-dependent personal cycle deterministic
-  ---
-  duration_ms: 1.3111
-  type: 'test'
-  ...
-# Subtest: tarot uses no duplicates and is reproducible for the same draw id
-ok 17 - tarot uses no duplicates and is reproducible for the same draw id
-  ---
-  duration_ms: 4.3221
-  type: 'test'
-  ...
-# Subtest: quota, trial, expiry and suspension never trust client plans
-ok 18 - quota, trial, expiry and suspension never trust client plans
-  ---
-  duration_ms: 4.551
-  type: 'test'
-  ...
-# Subtest: spreadsheet formulas are escaped
-ok 19 - spreadsheet formulas are escaped
-  ---
-  duration_ms: 0.8194
+  duration_ms: 0.5861
   type: 'test'
   ...
 # Subtest: fortune records keep creation time, target period, method and result version apart from life records
-ok 20 - fortune records keep creation time, target period, method and result version apart from life records
+ok 3 - fortune records keep creation time, target period, method and result version apart from life records
   ---
-  duration_ms: 3.0232
+  duration_ms: 2.6887
   type: 'test'
   ...
 # Subtest: schema changes are additive: v1.1 column order is preserved for existing workbooks
-ok 21 - schema changes are additive: v1.1 column order is preserved for existing workbooks
+ok 4 - schema changes are additive: v1.1 column order is preserved for existing workbooks
   ---
-  duration_ms: 2.2779
+  duration_ms: 2.1474
   type: 'test'
   ...
 # Subtest: write rules cover formula injection, duplicates, refusal and no false save claims
-ok 22 - write rules cover formula injection, duplicates, refusal and no false save claims
+ok 5 - write rules cover formula injection, duplicates, refusal and no false save claims
   ---
-  duration_ms: 0.5303
+  duration_ms: 0.4798
   type: 'test'
   ...
-# Subtest: formula escaping also covers tab/CR prefixes and leaves plain text alone
-ok 23 - formula escaping also covers tab/CR prefixes and leaves plain text alone
+# Subtest: exactly the 7 customer tools are registered, none of them operator-like
+ok 6 - exactly the 7 customer tools are registered, none of them operator-like
   ---
-  duration_ms: 0.6621
+  duration_ms: 3.5998
+  type: 'test'
+  ...
+# Subtest: every tool declares OAuth, input and output schemas, and honest annotations
+ok 7 - every tool declares OAuth, input and output schemas, and honest annotations
+  ---
+  duration_ms: 1.0226
+  type: 'test'
+  ...
+# Subtest: optional analytics tools require an explicit user request
+ok 8 - optional analytics tools require an explicit user request
+  ---
+  duration_ms: 3.7803
+  type: 'test'
+  ...
+# Subtest: no verified user means AUTHENTICATION_REQUIRED for every tool, before any work
+ok 9 - no verified user means AUTHENTICATION_REQUIRED for every tool, before any work
+  ---
+  duration_ms: 0.7999
+  type: 'test'
+  ...
+# Subtest: get_journal_schema needs no database and matches its output schema
+ok 10 - get_journal_schema needs no database and matches its output schema
+  ---
+  duration_ms: 1.5906
+  type: 'test'
+  ...
+# Subtest: input problems are reported before the database is touched
+ok 11 - input problems are reported before the database is touched
+  ---
+  duration_ms: 3.2232
+  type: 'test'
+  ...
+# Subtest: optional analytics tools refuse while the global switch is off
+ok 12 - optional analytics tools refuse while the global switch is off
+  ---
+  duration_ms: 0.8361
+  type: 'test'
+  ...
+# Subtest: backend failures fail closed with each tool’s documented code
+ok 13 - backend failures fail closed with each tool’s documented code
+  ---
+  duration_ms: 1.9117
+  type: 'test'
+  ...
+# Subtest: the fj_record_calculation reply is parsed, not trusted
+ok 14 - the fj_record_calculation reply is parsed, not trusted
+  ---
+  duration_ms: 3.553
+  type: 'test'
+  ...
+# Subtest: server instructions steer hosts away from redundant pre-calls and Google writes
+ok 15 - server instructions steer hosts away from redundant pre-calls and Google writes
+  ---
+  duration_ms: 1.0428
   type: 'test'
   ...
 # Subtest: accepts a Supabase OAuth access token bound to the verified user and an OAuth client
-ok 24 - accepts a Supabase OAuth access token bound to the verified user and an OAuth client
+ok 16 - accepts a Supabase OAuth access token bound to the verified user and an OAuth client
   ---
-  duration_ms: 5.6782
+  duration_ms: 4.4404
   type: 'test'
   ...
 # Subtest: rejects browser-session tokens without client_id, foreign issuers, wrong subject, role, audience, expiry
-ok 25 - rejects browser-session tokens without client_id, foreign issuers, wrong subject, role, audience, expiry
+ok 17 - rejects browser-session tokens without client_id, foreign issuers, wrong subject, role, audience, expiry
   ---
-  duration_ms: 0.8419
+  duration_ms: 0.7618
   type: 'test'
   ...
 # Subtest: trailing slash in configured issuer does not loosen the check
-ok 26 - trailing slash in configured issuer does not loosen the check
+ok 18 - trailing slash in configured issuer does not loosen the check
   ---
-  duration_ms: 0.5693
+  duration_ms: 0.5669
   type: 'test'
   ...
 # Subtest: JWT payload decoding is strict about shape
-ok 27 - JWT payload decoding is strict about shape
+ok 19 - JWT payload decoding is strict about shape
   ---
-  duration_ms: 1.0658
+  duration_ms: 0.9338
   type: 'test'
   ...
 # Subtest: pre-check rejects expired, foreign-issuer and non-OAuth tokens before any network call, and never accepts on its own
-ok 28 - pre-check rejects expired, foreign-issuer and non-OAuth tokens before any network call, and never accepts on its own
+ok 20 - pre-check rejects expired, foreign-issuer and non-OAuth tokens before any network call, and never accepts on its own
   ---
-  duration_ms: 0.7579
+  duration_ms: 0.6304
+  type: 'test'
+  ...
+# Subtest: operator commands are strict: unknown actions and fields are refused
+ok 21 - operator commands are strict: unknown actions and fields are refused
+  ---
+  duration_ms: 7.7485
+  type: 'test'
+  ...
+# Subtest: draft bodies are limited to 500 code points (Threads), not UTF-16 units
+ok 22 - draft bodies are limited to 500 code points (Threads), not UTF-16 units
+  ---
+  duration_ms: 0.75
+  type: 'test'
+  ...
+# Subtest: defaults and cost fields are validated
+ok 23 - defaults and cost fields are validated
+  ---
+  duration_ms: 2.7886
+  type: 'test'
+  ...
+# Subtest: only allowlisted error codes reach the operator
+ok 24 - only allowlisted error codes reach the operator
+  ---
+  duration_ms: 0.2176
   type: 'test'
   ...
 # Subtest: outbound requests are classified as Supabase Auth, PostgREST or other
-ok 29 - outbound requests are classified as Supabase Auth, PostgREST or other
+ok 25 - outbound requests are classified as Supabase Auth, PostgREST or other
   ---
-  duration_ms: 3.2553
+  duration_ms: 3.6794
   type: 'test'
   ...
 # Subtest: metered fetch counts and times calls only inside the current request
-ok 30 - metered fetch counts and times calls only inside the current request
+ok 26 - metered fetch counts and times calls only inside the current request
   ---
-  duration_ms: 116.9651
+  duration_ms: 144.1025
   type: 'test'
   ...
 # Subtest: concurrent requests never mix their counters
-ok 31 - concurrent requests never mix their counters
+ok 27 - concurrent requests never mix their counters
   ---
-  duration_ms: 7.8499
+  duration_ms: 5.821
   type: 'test'
   ...
 # Subtest: calculation time is attributed to the request and the value is returned
-ok 32 - calculation time is attributed to the request and the value is returned
+ok 28 - calculation time is attributed to the request and the value is returned
   ---
-  duration_ms: 1.0327
+  duration_ms: 1.197
   type: 'test'
   ...
 # Subtest: timing record holds only tool name, codes, durations and counts (no inputs, ids or tokens)
-ok 33 - timing record holds only tool name, codes, durations and counts (no inputs, ids or tokens)
+ok 29 - timing record holds only tool name, codes, durations and counts (no inputs, ids or tokens)
   ---
-  duration_ms: 1.6595
+  duration_ms: 1.3858
+  type: 'test'
+  ...
+# Subtest: ISO date parser refuses bad calendar dates and supports leap day
+ok 30 - ISO date parser refuses bad calendar dates and supports leap day
+  ---
+  duration_ms: 5.6245
+  type: 'test'
+  ...
+# Subtest: number reduction and time-dependent personal cycle deterministic
+ok 31 - number reduction and time-dependent personal cycle deterministic
+  ---
+  duration_ms: 1.2045
+  type: 'test'
+  ...
+# Subtest: tarot uses no duplicates and is reproducible for the same draw id
+ok 32 - tarot uses no duplicates and is reproducible for the same draw id
+  ---
+  duration_ms: 6.7835
+  type: 'test'
+  ...
+# Subtest: tarot draws are pinned: changing the algorithm silently would break replays and journals
+ok 33 - tarot draws are pinned: changing the algorithm silently would break replays and journals
+  ---
+  duration_ms: 1.1408
+  type: 'test'
+  ...
+# Subtest: tarot refuses invalid counts, short keys and malformed draw ids
+ok 34 - tarot refuses invalid counts, short keys and malformed draw ids
+  ---
+  duration_ms: 1.2868
   type: 'test'
   ...
 # Subtest: HMAC fingerprints bind the account, operation, feature and exact normalized input
-ok 34 - HMAC fingerprints bind the account, operation, feature and exact normalized input
+ok 35 - HMAC fingerprints bind the account, operation, feature and exact normalized input
   ---
-  duration_ms: 4.7676
+  duration_ms: 4.1738
   type: 'test'
   ...
 # Subtest: ops signature binds body, path, method and timestamp
-ok 35 - ops signature binds body, path, method and timestamp
+ok 36 - ops signature binds body, path, method and timestamp
   ---
-  duration_ms: 2.0487
+  duration_ms: 12.8371
   type: 'test'
   ...
 # Subtest: missing and placeholder keys fail closed
-ok 36 - missing and placeholder keys fail closed
+ok 37 - missing and placeholder keys fail closed
   ---
-  duration_ms: 0.9376
+  duration_ms: 0.9334
   type: 'test'
   ...
 # Subtest: referrals contain only a public post ID and expiration, reject tampering and expiry
-ok 37 - referrals contain only a public post ID and expiration, reject tampering and expiry
+ok 38 - referrals contain only a public post ID and expiration, reject tampering and expiry
   ---
-  duration_ms: 3.737
+  duration_ms: 8.3968
   type: 'test'
   ...
 # Subtest: bounded streaming body limit does not trust Content-Length
-ok 38 - bounded streaming body limit does not trust Content-Length
+ok 39 - bounded streaming body limit does not trust Content-Length
   ---
-  duration_ms: 74.5238
+  duration_ms: 85.536
+  type: 'test'
+  ...
+# Subtest: missing metrics remain null, a reported zero remains zero
+ok 40 - missing metrics remain null, a reported zero remains zero
+  ---
+  duration_ms: 3.3341
+  type: 'test'
+  ...
+# Subtest: metrics reported for an incompatible period are not accepted as lifetime values
+ok 41 - metrics reported for an incompatible period are not accepted as lifetime values
+  ---
+  duration_ms: 0.4435
+  type: 'test'
+  ...
+# Subtest: counters reject negatives, strings, unsafe integers, and NaN
+ok 42 - counters reject negatives, strings, unsafe integers, and NaN
+  ---
+  duration_ms: 0.3689
+  type: 'test'
+  ...
+# Subtest: followers are stocks; daily and range metrics preserve separate boundaries
+ok 43 - followers are stocks; daily and range metrics preserve separate boundaries
+  ---
+  duration_ms: 8.7606
+  type: 'test'
+  ...
+# Subtest: historical counters cannot be labeled as due 24h/72h snapshots
+ok 44 - historical counters cannot be labeled as due 24h/72h snapshots
+  ---
+  duration_ms: 2.9928
+  type: 'test'
+  ...
+# Subtest: import preserves original timestamp; skips missing text and replies
+ok 45 - import preserves original timestamp; skips missing text and replies
+  ---
+  duration_ms: 1.0282
   type: 'test'
   ...
 # Subtest: insights credentials are headers, not URL query strings
-ok 39 - insights credentials are headers, not URL query strings
+ok 46 - insights credentials are headers, not URL query strings
   ---
-  duration_ms: 77.6444
+  duration_ms: 80.1761
   type: 'test'
   ...
 # Subtest: followers fetch omits time filters and period metrics explicitly include them
-ok 40 - followers fetch omits time filters and period metrics explicitly include them
+ok 47 - followers fetch omits time filters and period metrics explicitly include them
   ---
-  duration_ms: 3.8799
+  duration_ms: 2.8493
   type: 'test'
   ...
 # Subtest: remote publish is never automatically retried on transport uncertainty
-ok 41 - remote publish is never automatically retried on transport uncertainty
+ok 48 - remote publish is never automatically retried on transport uncertainty
   ---
-  duration_ms: 2.125
+  duration_ms: 2.2153
   type: 'test'
   ...
 # Subtest: returned next URL cannot redirect the client to another host
-ok 42 - returned next URL cannot redirect the client to another host
+ok 49 - returned next URL cannot redirect the client to another host
   ---
-  duration_ms: 2.1748
+  duration_ms: 2.3432
   type: 'test'
   ...
 # Subtest: 429 and permissions are distinct safe error codes
-ok 43 - 429 and permissions are distinct safe error codes
+ok 50 - 429 and permissions are distinct safe error codes
   ---
-  duration_ms: 2.7583
+  duration_ms: 2.0758
   type: 'test'
   ...
 # Subtest: malformed IDs and overlong text cannot become remote paths or posts
-ok 44 - malformed IDs and overlong text cannot become remote paths or posts
+ok 51 - malformed IDs and overlong text cannot become remote paths or posts
   ---
-  duration_ms: 1.0115
+  duration_ms: 0.6226
   type: 'test'
   ...
 # Subtest: reject open redirects and preserve safe consent route
-ok 45 - reject open redirects and preserve safe consent route
+ok 52 - reject open redirects and preserve safe consent route
   ---
-  duration_ms: 4.7075
+  duration_ms: 2.2223
   type: 'test'
   ...
 # Subtest: mutating browser endpoint requires matching Origin header
-ok 46 - mutating browser endpoint requires matching Origin header
+ok 53 - mutating browser endpoint requires matching Origin header
   ---
-  duration_ms: 68.7117
+  duration_ms: 113.8775
   type: 'test'
   ...
-1..46
-# tests 46
+1..53
+# tests 53
 # suites 0
-# pass 46
+# pass 53
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 794.5711
+# duration_ms 1472.5036
+# exit 0, 3081 ms

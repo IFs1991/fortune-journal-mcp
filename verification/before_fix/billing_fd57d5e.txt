@@ -1,0 +1,6 @@
+# New supabase/tests/billing.sql run against the pre-fix fj_apply_billing (fd57d5e billing SQL) on the local Supabase stack (2026-10-17):
+psql:supabase/tests/billing.sql:208: ERROR:  REGRESSION 1: newer state in a duplicate cash notice was ignored: {"duplicate": true, "stateApplied": false}
+# Separate probe of bugs 2 and 3 on the same database:
+NOTICE:  BUG3 BEFORE: same-time plan/price/cancel change -> {"duplicate": false, "stateApplied": false, "stateDisposition": "older_or_identical"}
+NOTICE:  BUG2 BEFORE: subscriptions rows left after deletion: 0
+NOTICE:  BUG2 BEFORE: refund after deletion raised BILLING_BINDING_REQUIRED ; net cash for sub_x = 499

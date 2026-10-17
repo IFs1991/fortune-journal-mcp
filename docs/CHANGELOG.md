@@ -1,4 +1,57 @@
-# Unreleased — MCP communication optimization
+# v0.3.1 — Release hardening (2026-10-17)
+
+Security and integrity fixes found before the first public deployment. Every fix has a regression test that failed (or showed the bad behaviour) on v0.3.0; evidence in [verification/RESULTS.md](../verification/RESULTS.md).
+
+## Security (P0)
+
+- **Web/MCP boundary**: an MCP OAuth token placed into a Supabase cookie could call export, preferences, revoke and account deletion. Account pages and APIs now require a Supabase-verified browser-session token (no `client_id`, `aud=authenticated` only, live `session_id`) plus an HttpOnly binding cookie issued only by `/auth/callback` (`WEB_SESSION_HMAC_KEY`, new). Cookie POSTs require exact Origin, same-origin fetch metadata and a form body; export refuses cross-site requests.
+- **Token audience**: Custom Access Token Hook `fj_access_token_hook` sets `aud=urn:fortune-journal:mcp` on OAuth-client tokens; `/api/mcp` requires exactly that audience. Must be enabled in Supabase Auth for Staging/Production.
+- **Open redirect**: `safeNextPath` let `/\t/evil.example` through (browsers drop TAB). It now rebuilds only the consent path.
+- **MCP Origin/Host**: foreign `Origin` → 403 before authentication, foreign `Host` → 421, body capped at 64 KiB. `MCP_ALLOWED_ORIGINS` (new, empty by default).
+- **Rate limits**: per-instance limits with 429 for `/api/mcp` (address and bearer) and browser routes.
+
+## Billing / DB (P1)
+
+- A second notice of the same charge no longer drops the newer subscription state; equal-time snapshots compare plan, price, cancellation, interval and currency (`needs_reconciliation`, fail closed on entitlement disagreement, `reconciled` snapshots resolve); subscription bindings survive account deletion de-identified so refunds and chargebacks are recorded. `fj_revenue_report.eventsNeedingReconciliation`. Webhook stays 501; no checkout.
+
+## Operations (P1)
+
+- Maintenance reports exhausted/failed steps as failures (`retryable` vs permanent); cron answers 500 on any failure.
+- Threads publishing: outcomes `success` / `failed` (before the publish call, retryable on request) / `unknown` (never re-posted); `recorded` flag; `resolve_publish` operator command and `fj_resolve_publish`; unknown posts listed in the report.
+- `fj_access_token_hook` volatility STABLE (db lint).
+
+## Tooling
+
+- `npm run verify:local` (one command, no GitHub Actions), `npm run test:ops:local`, `scripts/check-env.mjs`, `scripts/smoke-remote.mjs`; `.mcp.json` declares `type: "http"`.
+
+# v0.3.0 — Pre-release baseline (2026-10-16)
+
+Record with before/after numbers: [verification/refactor_2026-10-16.md](../verification/refactor_2026-10-16.md).
+
+## Changed (breaking for databases built from v0.2.x; none exists remotely)
+
+- **DB**: one baseline migration replaces initial + 5 additive + 3 forward fixes, templates and manifest (history stays in Git). `usage_counters` removed (usage counted from `user_readings` under the existing row lock); tier rule only in `fj_access_status`, limits only in `fj_record_calculation`; no anon/authenticated grants or policies (Data API is not a product surface); `billing_events` simplified to a verified-only ledger with `state_disposition`; snapshot tables keep `run_id` without an FK; unused columns, states and indexes removed. `fj_access_snapshot` and `consume_usage` removed.
+- **MCP**: `src/mcp/tools.ts` lists all 7 tools; auth gate, timing and fail-closed codes applied once. Wire contract (names, input/output schemas, error codes) unchanged; descriptions tightened and list their error codes.
+- **Operator API**: `src/lib/operations.ts` split into `src/ops/*`; report reads run in parallel; scheduled snapshot lookup is one query.
+- **Web**: account logic in `src/account.ts`; login page reads preferences and grants in parallel.
+- **Docs**: AGENTS.md is the only rule file; BUILD_STATUS merged into DEFINITION_OF_DONE; DEPLOYMENT_AND_TESTS + UPGRADE + THREADS_OPERATIONS + OPERATIONS_AGENT → OPERATIONS.md; DB_RLS_DESIGN → DATABASE.md + generated DB_CATALOG.md; DATA_BOUNDARIES → SECURITY.md; MANIFEST.sha256 removed (Git is the integrity record).
+
+## Added
+
+- Prettier 3.9.9 (`format`, `format:check`), `noUnusedLocals/Parameters`, CI Node 24 build.
+- `npm run db:schema` (generated `supabase/schema.sql`, `docs/generated/DB_CATALOG.md`) with CI drift check; `supabase/applied-migrations.json` guard.
+- SQL suites by feature (catalog, calculations, privacy, billing, operations, retention); dump/restore round trip in `test-db.sh`; unit contract tests for the tool registry, ops commands and export input; `scripts/probe-resource-audience.mjs`, `scripts/bench-db.sh`.
+
+## Fixed
+
+- Export accepted prototype keys as a resource (`resource=__proto__`) and then failed with 503; now 400.
+- `first_calculated_at` update rewrote the `user_access` row on every calculation.
+
+## Removed
+
+- TypeScript copies of DB policy and KPI formulas (`entitlements.ts`, `metrics.ts`), unconnected billing adapter scaffolding, unused `escapeSheetText`, syntax-only/pure-type check scripts (full typecheck covers them).
+
+# PR #1 (merged to main 2026-10-15 as f15bb55, version stayed 0.2.1) — MCP communication optimization
 
 Details, auth decision and measurements: [PERFORMANCE.md](PERFORMANCE.md).
 

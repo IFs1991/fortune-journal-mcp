@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.vercel/
+package-lock.json
+verification/
+supabase/schema.sql
+docs/generated/
+*.md
+.claude/

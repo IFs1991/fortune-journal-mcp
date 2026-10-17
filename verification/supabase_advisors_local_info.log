@@ -1,0 +1,18 @@
+$ supabase db advisors --local --type all --level info </dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const i=s.indexOf("{");const r=JSON.parse(s.slice(i)).results;for(const x of r)console.log(x.level,x.name,x.detail)})'
+# started 2026-10-16T03:04:34Z at commit fd0d36f
+Connecting to local database...
+A new version of Supabase CLI is available: v2.121.0 (currently installed v2.120.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+INFO unused_index Index `funnel_events_post` on table `public.funnel_events` has not been used
+INFO unused_index Index `billing_events_cash_time` on table `public.billing_events` has not been used
+INFO rls_enabled_no_policy Table `public.account_metric_snapshots` has RLS enabled, but no policies exist
+INFO rls_enabled_no_policy Table `public.automation_runs` has RLS enabled, but no policies exist
+INFO rls_enabled_no_policy Table `public.billing_events` has RLS enabled, but no policies exist
+INFO rls_enabled_no_policy Table `public.fortune_posts` has RLS enabled, but no policies exist
+INFO rls_enabled_no_policy Table `public.funnel_events` has RLS enabled, but no policies exist
+INFO rls_enabled_no_policy Table `public.post_metric_snapshots` has RLS enabled, but no policies exist
+INFO rls_enabled_no_policy Table `public.reading_feedback` has RLS enabled, but no policies exist
+INFO rls_enabled_no_policy Table `public.subscriptions` has RLS enabled, but no policies exist
+INFO rls_enabled_no_policy Table `public.user_access` has RLS enabled, but no policies exist
+INFO rls_enabled_no_policy Table `public.user_readings` has RLS enabled, but no policies exist
+# exit 0, 2487 ms

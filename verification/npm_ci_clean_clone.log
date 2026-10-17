@@ -1,16 +1,26 @@
-f522827 docs: performance report, auth decision, migration 08 deploy order
-
-added 44 packages, and audited 45 packages in 1m
+$ cd /c/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/c367663d-100d-48b4-baaf-ae6e1114fff8/scratchpad/clone && git log --oneline -1 && npm ci 2>&1 | tail -4 && npm run format:check && npm run check:static && npm test 2>&1 | grep -E '^# (tests|pass|fail)' && npm run typecheck
+# started 2026-10-16T03:06:39Z at commit fd0d36f
+fd0d36f docs: one rule file, one status file, generated DB catalog
+9 packages are looking for funding
+  run `npm fund` for details
 
 found 0 vulnerabilities
-# pass 46
+
+> fortune-journal-mcp@0.3.0 format:check
+> prettier --check .
+
+Checking formatting...
+All matched files use Prettier code style!
+
+> fortune-journal-mcp@0.3.0 check:static
+> node scripts/check-static.mjs
+
+PASS: static contracts (1 migration(s), 0 applied remotely, 7 MCP tools).
+# tests 53
+# pass 53
 # fail 0
 
-> fortune-journal-mcp@0.2.1 typecheck
+> fortune-journal-mcp@0.3.0 typecheck
 > tsc --noEmit
 
-
-> fortune-journal-mcp@0.2.1 db:check-prepared
-> node scripts/prepare-migrations.mjs --check
-
-Prepared 5 additive migrations via official CLI. No remote database was changed.
+# exit 0, 91470 ms

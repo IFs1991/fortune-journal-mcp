@@ -1,6 +1,11 @@
+$ supabase db lint --local --level warning </dev/null
+# started 2026-10-16T03:04:19Z at commit fd0d36f
 Connecting to local database...
 Linting schema: extensions
 Linting schema: public
 
 No schema errors found
 {"results":[],"message":"db lint"}
+A new version of Supabase CLI is available: v2.121.0 (currently installed v2.120.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+# exit 0, 2259 ms

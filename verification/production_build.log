@@ -1,13 +1,13 @@
+$ APP_ORIGIN=https://example.invalid NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=compile_only_placeholder NEXT_TELEMETRY_DISABLED=1 npm run build
+# started 2026-10-16T03:02:12Z at commit fd0d36f
 
-> fortune-journal-mcp@0.2.1 build
+> fortune-journal-mcp@0.3.0 build
 > next build
 
    ▲ Next.js 15.5.27
 
    Creating an optimized production build ...
-<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (113kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
-<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (268kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
- ✓ Compiled successfully in 43s
+ ✓ Compiled successfully in 7.8s
    Linting and checking validity of types ...
    Collecting page data ...
    Generating static pages (0/13) ...
@@ -48,3 +48,4 @@ Route (app)                                             Size  First Load JS
 ○  (Static)   prerendered as static content
 ƒ  (Dynamic)  server-rendered on demand
 
+# exit 0, 44280 ms

@@ -15,18 +15,22 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      matrix:
+        # 22.16.0 = package.json engines minimum; 24 = the runtime of the Vercel project (audit 2026-10-16).
+        node: ['22.16.0', '24']
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '22.16.0'
+          node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
-      - run: npm test
+      - run: npm run format:check
       - run: npm run check:static
-      - run: npm run db:check-prepared
+      - run: npm test
       - run: npm run typecheck
       - run: npm run build
         env:
@@ -42,7 +46,10 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      # Every SQL suite, parallel-session concurrency and dump/restore on disposable PostgreSQL 17.
       - run: bash scripts/test-db.sh
+      # supabase/schema.sql and docs/generated/DB_CATALOG.md must match what the migrations build.
+      - run: bash scripts/db-schema.sh --check
   supabase-local:
     # Real Supabase stack from the CLI: Supabase Postgres image + GoTrue OAuth 2.1 server + PostgREST.
     runs-on: ubuntu-latest
@@ -68,7 +75,7 @@ jobs:
           const r=()=>require("crypto").randomBytes(32).toString("hex");
           const env={APP_ORIGIN:"http://localhost:3000",NEXT_PUBLIC_SUPABASE_URL:s.API_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:s.PUBLISHABLE_KEY,
            SUPABASE_SECRET_KEY:s.SECRET_KEY,REQUEST_HMAC_KEY:r(),TAROT_HMAC_KEY:r(),TAROT_KEY_VERSION:"v1",OPS_HMAC_KEY:r(),ATTRIBUTION_HMAC_KEY:r(),
-           CRON_SECRET:r(),MCP_CLIENT_NAMES_JSON:"{}",NEXT_TELEMETRY_DISABLED:"1"};
+           CRON_SECRET:r(),WEB_SESSION_HMAC_KEY:r(),MCP_CLIENT_NAMES_JSON:"{}",NEXT_TELEMETRY_DISABLED:"1"};
           require("fs").writeFileSync(process.env.RUNNER_TEMP+"/fj.env",Object.entries(env).map(([k,v])=>k+"="+v).join("\n")+"\n");'
           set -a; . "$RUNNER_TEMP/fj.env"; set +a
           npm run build

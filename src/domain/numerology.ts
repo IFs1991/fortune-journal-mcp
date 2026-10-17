@@ -13,15 +13,20 @@ export type NumerologyReading = {
   disclaimer: string;
 };
 
-export function parseISODate(value: string): { year: number; month: number; day: number } {
+export function parseISODate(value: string): {year: number; month: number; day: number} {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('DATE_FORMAT');
   const [year, month, day] = value.split('-').map(Number);
   const dt = new Date(Date.UTC(year, month - 1, day));
-  if (year < 1900 || year > 2100 || dt.getUTCFullYear() !== year ||
-      dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
+  if (
+    year < 1900 ||
+    year > 2100 ||
+    dt.getUTCFullYear() !== year ||
+    dt.getUTCMonth() !== month - 1 ||
+    dt.getUTCDate() !== day
+  ) {
     throw new Error('INVALID_DATE');
   }
-  return { year, month, day };
+  return {year, month, day};
 }
 
 /** One specified convention: master numbers 11, 22, 33 are retained only at reduction points. */
@@ -40,13 +45,24 @@ export function calculateNumerology(birthDate: string, asOf: string): Numerology
   const today = parseISODate(asOf);
   const lifePath = reduceNumber([...birthDate.replaceAll('-', '')].reduce((a, x) => a + Number(x), 0));
   // Personal-year convention: birth month/day + target calendar year's digits (no master retention).
-  const personalYear = reduceNumber(born.month + born.day + reduceNumber(
-    [...String(today.year)].reduce((a, x) => a + Number(x), 0), false), false);
+  const personalYear = reduceNumber(
+    born.month +
+      born.day +
+      reduceNumber(
+        [...String(today.year)].reduce((a, x) => a + Number(x), 0),
+        false,
+      ),
+    false,
+  );
   const personalMonth = reduceNumber(personalYear + today.month, false);
   return {
     schemaVersion: '1.0',
     algorithm: NUMEROLOGY_ALGORITHM,
-    birthDate, asOf, lifePath, personalYear, personalMonth,
+    birthDate,
+    asOf,
+    lifePath,
+    personalYear,
+    personalMonth,
     interpretationKeys: [
       `life_path_${lifePath}`,
       `personal_year_${personalYear}`,

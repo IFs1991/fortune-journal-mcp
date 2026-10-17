@@ -1,6 +1,6 @@
 {
   "name": "fortune-journal",
-  "version": "0.2.1",
+  "version": "0.3.1",
   "description": "Reflect on fortune calculations and life events using your own Google Sheets, without storing your journal on Fortune Journal servers.",
   "skills": "./skills/",
   "interface": {
@@ -9,10 +9,7 @@
     "longDescription": "Calculate numerology and tarot, and use your own Google Sheets connector to keep your journal. Optional usage analytics and fixed-label feedback require separate consent; the service retains minimal operational request metadata but never journal text.",
     "developerName": "Fortune Journal",
     "category": "Lifestyle",
-    "capabilities": [
-      "Read",
-      "Write"
-    ],
+    "capabilities": ["Read", "Write"],
     "defaultPrompt": [
       "Calculate my personal numerology for today and explain the convention used.",
       "Help me set up a Fortune Journal workbook in my own Google Sheets. Ask before writing.",

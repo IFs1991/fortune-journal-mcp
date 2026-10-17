@@ -1,0 +1,25 @@
+{
+  "commit": "f6897dc",
+  "workingTreeClean": true,
+  "node": "v22.22.0",
+  "ranAt": "2026-10-17T09:17:37Z",
+  "failed": 0, "blocked": 0,
+  "steps": [
+    {"step":"npm_ci","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:15:37Z","endedAt":"2026-10-17T09:15:48Z","command":"npm ci --no-audit --no-fund"},
+    {"step":"format","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:15:48Z","endedAt":"2026-10-17T09:15:51Z","command":"npm run format:check"},
+    {"step":"static","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:15:51Z","endedAt":"2026-10-17T09:15:51Z","command":"npm run check:static"},
+    {"step":"unit","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:15:51Z","endedAt":"2026-10-17T09:15:53Z","command":"npm test"},
+    {"step":"typecheck","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:15:53Z","endedAt":"2026-10-17T09:15:55Z","command":"npm run typecheck"},
+    {"step":"audit","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:15:55Z","endedAt":"2026-10-17T09:15:56Z","command":"npm audit --audit-level=high"},
+    {"step":"db_pg17","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:15:56Z","endedAt":"2026-10-17T09:16:04Z","command":"bash scripts/test-db.sh"},
+    {"step":"schema_drift","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:16:04Z","endedAt":"2026-10-17T09:16:08Z","command":"bash scripts/db-schema.sh --check"},
+    {"step":"supabase_reset","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:16:10Z","endedAt":"2026-10-17T09:16:25Z","command":"supabase db reset --local --network-id fj_local_net"},
+    {"step":"supabase_sql","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:16:25Z","endedAt":"2026-10-17T09:16:27Z","command":"bash scripts/test-supabase-local.sh"},
+    {"step":"supabase_lint","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:16:27Z","endedAt":"2026-10-17T09:16:28Z","command":"supabase db lint --local --fail-on warning"},
+    {"step":"supabase_advisors","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:16:28Z","endedAt":"2026-10-17T09:16:29Z","command":"supabase db advisors --local --type all --level warn --fail-on warn"},
+    {"step":"ops_state_machines","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:16:29Z","endedAt":"2026-10-17T09:16:31Z","command":"npm run test:ops:local"},
+    {"step":"build","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:16:32Z","endedAt":"2026-10-17T09:16:59Z","command":"with_env npm run build"},
+    {"step":"e2e_analytics_off","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:17:00Z","endedAt":"2026-10-17T09:17:16Z","command":"e2e false off"},
+    {"step":"e2e_analytics_on","result":"PASS","exitCode":0,"startedAt":"2026-10-17T09:17:18Z","endedAt":"2026-10-17T09:17:37Z","command":"e2e true on"}
+  ]
+}

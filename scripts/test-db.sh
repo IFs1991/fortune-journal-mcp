@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
+# Disposable PostgreSQL 17 (digest-pinned) + a minimal Auth stub: apply every migration, run every SQL suite,
+# check concurrency with real parallel sessions, then dump/restore and re-run the catalog contract.
+# Accepts no database URL: it can only create and destroy its own container.
 set -euo pipefail
-# No remote URL accepted. Tests can ONLY create and destroy their own disposable container.
-command -v docker >/dev/null || { echo 'BLOCKED: Docker/PostgreSQL runtime unavailable; SQL/RLS tests were not run.' >&2; exit 2; }
+command -v docker >/dev/null || { echo 'BLOCKED: Docker unavailable; SQL tests were not run.' >&2; exit 2; }
 # Git Bash on Windows rewrites /repo-style arguments into host paths; container paths must stay literal.
 export MSYS_NO_PATHCONV=1
 # `pwd -W` yields C:/... on Git Bash so docker.exe resolves host paths; plain pwd elsewhere.
 root="$(cd "$(dirname "$0")/.." && { pwd -W 2>/dev/null || pwd; })"
 container="fj-db-test-$$"
 out="$(mktemp -d)"
-cleanup(){ docker rm -f "$container" >/dev/null 2>&1 || true; rm -rf "$out"; }
+cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; rm -rf "$out"; }
 trap cleanup EXIT
+
 # Reviewed digest of postgres:17 (2026-10-15). Update deliberately, never float.
 image="${FJ_TEST_PG_IMAGE:-postgres@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3}"
 docker run -d --name "$container" -e POSTGRES_PASSWORD=local_test_only "$image" >/dev/null
@@ -18,71 +21,98 @@ docker exec "$container" mkdir -p /repo/supabase
 docker cp "$root/supabase/migrations" "$container:/repo/supabase/migrations" >/dev/null
 docker cp "$root/supabase/tests" "$container:/repo/supabase/tests" >/dev/null
 ready=0
-for _ in $(seq 1 40); do if docker exec "$container" pg_isready -U postgres >/dev/null 2>&1; then ready=1;break;fi;sleep 1;done
-[[ "$ready" == 1 ]] || { echo 'Test database did not start' >&2;exit 1; }
-for mode in fresh upgrade; do
- db="fj_$mode"
- docker exec "$container" createdb -U postgres "$db"
- sql(){ docker exec -i "$container" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 "$@"; }
- sql -f /repo/supabase/tests/local_auth_stub.sql
- migrations=()
- for file in "$root"/supabase/migrations/[0-9]*_*.sql;do migrations+=("$(basename "$file")");done
- [[ "${#migrations[@]}" -ge 6 ]] || { echo 'BLOCKED: run npm run db:prepare first; only the historical migration exists.' >&2; exit 2; }
- sql -f "/repo/supabase/migrations/${migrations[0]}"
- if [[ "$mode" == upgrade ]];then sql -f /repo/supabase/tests/v01_upgrade_seed.sql;fi
- for file in "${migrations[@]:1}";do sql -f "/repo/supabase/migrations/$file";done
- for test in rls_security v02_security v02_transactions v02_billing v02_retention_kpis v02_negative_edge v02_forward_fix_06 v02_forward_fix_08;do sql -f "/repo/supabase/tests/$test.sql";done
- # Concurrent different requests cannot exceed the Free weekly quota of three.
- sql <<'SQL'
-INSERT INTO auth.users(id) VALUES('33333333-3333-4333-8333-333333333333'),('44444444-4444-4444-8444-444444444444'),('55555555-5555-4555-8555-555555555555');
-INSERT INTO public.user_access(user_id,trial_started_at,trial_ends_at) VALUES('33333333-3333-4333-8333-333333333333',now()-interval '20 days',now()-interval '6 days');
-SQL
- pids=()
- for n in $(seq 1 10);do
-  req="$(printf '00000000-0000-4000-8000-%012d' "$n")"
-  sql -qAt -c "SET ROLE service_role; SELECT public.fj_record_calculation('33333333-3333-4333-8333-333333333333','$req',repeat('c',64),'calculate_numerology','test-v1',current_date);" >"$out/diff-$n" & pids+=("$!")
- done
- for pid in "${pids[@]}";do wait "$pid";done
- # Concurrent identical retries must consume only one unit.
- pids=()
- for n in $(seq 1 10);do
-  sql -qAt -c "SET ROLE service_role; SELECT public.fj_record_calculation('44444444-4444-4444-8444-444444444444','dddddddd-dddd-4ddd-8ddd-dddddddddddd',repeat('d',64),'calculate_numerology','test-v1',current_date);" >"$out/same-$n" & pids+=("$!")
- done
- for pid in "${pids[@]}";do wait "$pid";done
- # Concurrent identical tarot retries spanning two request dates (migration 08 replay path): one unit, one reading.
- pids=()
- for n in $(seq 1 10);do
-  day=$(( n % 2 ))
-  sql -qAt -c "SET ROLE service_role; SELECT public.fj_record_calculation('55555555-5555-4555-8555-555555555555','eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',repeat('e',64),'draw_tarot','test-v1',current_date+$day);" >"$out/tarot-$n" & pids+=("$!")
- done
- for pid in "${pids[@]}";do wait "$pid";done
- tfresh=$(cat "$out"/tarot-* | grep -c '"replayed": false' || true); treplays=$(cat "$out"/tarot-* | grep -c '"replayed": true' || true)
- tids=$(cat "$out"/tarot-* | grep -o '"readingId": "[^"]*"' | sort -u | wc -l)
- [[ "$tfresh" == 1 && "$treplays" == 9 && "$tids" -eq 1 ]] || { echo "concurrent tarot retries: fresh=$tfresh replays=$treplays ids=$tids" >&2; exit 1; }
- rm -f "$out"/tarot-*
- # Every caller gets a definite answer: exactly 3 OK + 7 limit for distinct requests,
- # 1 fresh + 9 replays of the same reading for identical retries.
- ok=$(cat "$out"/diff-* | grep -c '"ok": true' || true); limited=$(cat "$out"/diff-* | grep -c 'USAGE_LIMIT_REACHED' || true)
- fresh=$(cat "$out"/same-* | grep -c '"replayed": false' || true); replays=$(cat "$out"/same-* | grep -c '"replayed": true' || true)
- ids=$(cat "$out"/same-* | grep -o '"readingId": "[^"]*"' | sort -u | wc -l)
- [[ "$ok" == 3 && "$limited" == 7 ]] || { echo "concurrent distinct requests: ok=$ok limited=$limited" >&2; exit 1; }
- [[ "$fresh" == 1 && "$replays" == 9 && "$ids" -eq 1 ]] || { echo "concurrent retries: fresh=$fresh replays=$replays ids=$ids" >&2; exit 1; }
- rm -f "$out"/diff-* "$out"/same-*
- sql <<'SQL'
-DO $$ BEGIN
- IF (SELECT sum(used_count) FROM public.usage_counters WHERE user_id='33333333-3333-4333-8333-333333333333')<>3 THEN RAISE EXCEPTION 'concurrent quota failed';END IF;
- IF (SELECT count(*) FROM public.user_readings WHERE user_id='33333333-3333-4333-8333-333333333333')<>3 THEN RAISE EXCEPTION 'ledger count wrong';END IF;
- IF (SELECT sum(used_count) FROM public.usage_counters WHERE user_id='44444444-4444-4444-8444-444444444444')<>1 THEN RAISE EXCEPTION 'concurrent idempotency failed';END IF;
- IF (SELECT sum(used_count) FROM public.usage_counters WHERE user_id='55555555-5555-4555-8555-555555555555')<>1 THEN RAISE EXCEPTION 'concurrent tarot idempotency failed';END IF;
-END; $$;
-SQL
- if [[ "$mode" == upgrade ]];then
- sql <<'SQL'
-DO $$ BEGIN
- IF NOT EXISTS(SELECT 1 FROM public.billing_events WHERE provider='legacy' AND event_id='event_legacy') THEN RAISE EXCEPTION 'legacy data lost';END IF;
- IF EXISTS(SELECT 1 FROM public.subscriptions WHERE provider='legacy' AND verified_at IS NOT NULL) THEN RAISE EXCEPTION 'fabricated billing verification';END IF;
-END; $$;
-SQL
- fi
- echo "PASS: $mode PostgreSQL migration/RLS/transaction/concurrency tests (Auth stub only)"
+for _ in $(seq 1 40); do
+  if docker exec "$container" pg_isready -U postgres >/dev/null 2>&1; then ready=1; break; fi
+  sleep 1
 done
+[[ "$ready" == 1 ]] || { echo 'Test database did not start' >&2; exit 1; }
+
+db=fj_test
+docker exec "$container" createdb -U postgres "$db"
+sql() { docker exec -i "$container" psql -U postgres -d "$db" -v ON_ERROR_STOP=1 -q "$@"; }
+sql -f /repo/supabase/tests/support/local_auth_stub.sql
+for file in "$root"/supabase/migrations/*.sql; do sql -f "/repo/supabase/migrations/$(basename "$file")"; done
+for file in "$root"/supabase/tests/*.sql; do
+  sql -f "/repo/supabase/tests/$(basename "$file")"
+  echo "PASS: $(basename "$file" .sql)"
+done
+
+# ===== Concurrency (real parallel sessions) =====
+sql <<'SQL'
+INSERT INTO auth.users (id) VALUES ('33333333-3333-4333-8333-333333333333'), ('44444444-4444-4444-8444-444444444444'),
+  ('55555555-5555-4555-8555-555555555555');
+INSERT INTO public.user_access (user_id, trial_started_at, trial_ends_at)
+VALUES ('33333333-3333-4333-8333-333333333333', now() - interval '20 days', now() - interval '6 days');
+SQL
+call() { sql -At -c "SET ROLE service_role; SELECT public.fj_record_calculation($1);" >"$2" & pids+=("$!"); }
+pids=()
+# 10 different requests from a Free user: exactly 3 succeed, 7 hit the weekly limit.
+for n in $(seq 1 10); do
+  call "'33333333-3333-4333-8333-333333333333','$(printf '00000000-0000-4000-8000-%012d' "$n")',repeat('c',64),'calculate_numerology','test-v1',current_date" "$out/diff-$n"
+done
+# 10 identical retries: one fresh reading, nine replays of it.
+for n in $(seq 1 10); do
+  call "'44444444-4444-4444-8444-444444444444','dddddddd-dddd-4ddd-8ddd-dddddddddddd',repeat('d',64),'calculate_numerology','test-v1',current_date" "$out/same-$n"
+done
+# 10 identical tarot retries sent with two different request dates: still one reading.
+for n in $(seq 1 10); do
+  call "'55555555-5555-4555-8555-555555555555','eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',repeat('e',64),'draw_tarot','test-v1',current_date+$((n % 2))" "$out/tarot-$n"
+done
+for pid in "${pids[@]}"; do wait "$pid"; done
+count() { cat "$out"/$1-* | grep -c "$2" || true; }
+ids() { cat "$out"/$1-* | grep -o '"readingId": "[^"]*"' | sort -u | wc -l; }
+[[ "$(count diff '"ok": true')" == 3 && "$(count diff USAGE_LIMIT_REACHED)" == 7 ]] \
+  || { echo "concurrent distinct requests: $(count diff '"ok": true') ok" >&2; exit 1; }
+[[ "$(count same '"replayed": false')" == 1 && "$(count same '"replayed": true')" == 9 && "$(ids same)" -eq 1 ]] \
+  || { echo 'concurrent identical retries diverged' >&2; exit 1; }
+[[ "$(count tarot '"replayed": false')" == 1 && "$(count tarot '"replayed": true')" == 9 && "$(ids tarot)" -eq 1 ]] \
+  || { echo 'concurrent tarot retries diverged' >&2; exit 1; }
+sql <<'SQL'
+DO $$ BEGIN
+  IF (SELECT count(*) FROM public.user_readings WHERE user_id = '33333333-3333-4333-8333-333333333333') <> 3 THEN RAISE EXCEPTION 'free limit exceeded'; END IF;
+  IF (SELECT count(*) FROM public.user_readings WHERE user_id = '44444444-4444-4444-8444-444444444444') <> 1 THEN RAISE EXCEPTION 'retry consumed twice'; END IF;
+  IF (SELECT count(*) FROM public.user_readings WHERE user_id = '55555555-5555-4555-8555-555555555555') <> 1 THEN RAISE EXCEPTION 'tarot retry consumed twice'; END IF;
+END $$;
+SQL
+echo 'PASS: concurrency (10 distinct -> 3 + 7 limited, 10 identical -> 1 + 9 replays, cross-date tarot -> 1 reading)'
+
+# ===== Billing concurrency: parallel deliveries of one charge count cash once and keep the newest state =====
+sql <<'SQL'
+INSERT INTO auth.users (id) VALUES ('66666666-6666-4666-8666-666666666666');
+INSERT INTO public.subscriptions (user_id, provider, provider_customer_id, provider_subscription_id, status)
+VALUES ('66666666-6666-4666-8666-666666666666', 'test_provider', 'cust_parallel', 'sub_parallel', 'incomplete');
+SQL
+bill() {
+  sql -At -c "SET ROLE service_role; SELECT public.fj_apply_billing('test_provider', '$1', jsonb_build_object(
+    'event_type', 'payment_succeeded', 'provider_subscription_id', 'sub_parallel', 'occurred_at', '2026-10-01T00:00:00Z',
+    'economic_key', 'charge:parallel', 'amount_minor', 499, 'currency', 'USD', 'currency_exponent', 2, 'billing_reason', 'initial',
+    'subscription', jsonb_build_object('status', 'active', 'provider_updated_at', '$2', 'current_period_end', now() + interval '30 days')));" \
+    >"$out/bill-$3" 2>&1 &
+  pids+=("$!")
+}
+pids=()
+# The same event delivered 10 times at once, and 10 different notices of the same charge with different snapshot times.
+for n in $(seq 1 10); do bill evt_parallel_same 2026-10-01T00:00:00Z "same-$n"; done
+for n in $(seq 1 10); do bill "evt_parallel_$n" "2026-10-01T00:00:$(printf '%02d' "$n")Z" "notice-$n"; done
+for pid in "${pids[@]}"; do wait "$pid"; done
+if grep -l ERROR "$out"/bill-* >/dev/null 2>&1; then cat "$out"/bill-* >&2; echo 'parallel billing deliveries raised errors' >&2; exit 1; fi
+sql <<'SQL'
+DO $$ BEGIN
+  IF (SELECT count(*) FROM public.billing_events WHERE economic_key = 'charge:parallel') <> 1 THEN RAISE EXCEPTION 'parallel deliveries counted cash more than once'; END IF;
+  IF (SELECT provider_updated_at FROM public.subscriptions WHERE provider_subscription_id = 'sub_parallel') <> '2026-10-01T00:00:10Z' THEN
+    RAISE EXCEPTION 'newest snapshot of the duplicate notices was not kept';
+  END IF;
+  IF public.fj_access_status('66666666-6666-4666-8666-666666666666') <> 'premium' THEN RAISE EXCEPTION 'verified state not applied'; END IF;
+END $$;
+SQL
+echo 'PASS: billing concurrency (20 parallel deliveries of one charge -> 1 cash row, newest snapshot applied)'
+
+# ===== Dump / restore: the populated schema restores and keeps its contract =====
+docker exec "$container" pg_dump -U postgres -Fc -d "$db" -f /tmp/fj.dump
+docker exec "$container" createdb -U postgres fj_restored
+docker exec "$container" pg_restore -U postgres -d fj_restored --exit-on-error /tmp/fj.dump
+restored() { docker exec -i "$container" psql -U postgres -d fj_restored -v ON_ERROR_STOP=1 -q -At "$@"; }
+restored -f /repo/supabase/tests/catalog.sql
+[[ "$(restored -c 'SELECT count(*) FROM public.user_readings')" == "$(sql -At -c 'SELECT count(*) FROM public.user_readings')" ]] \
+  || { echo 'restored row count differs' >&2; exit 1; }
+echo 'PASS: pg_dump/pg_restore round trip (catalog contract and rows preserved)'

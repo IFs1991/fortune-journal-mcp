@@ -1,6 +1,6 @@
 {
   "name": "fortune-journal-mcp",
-  "version": "0.2.1",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "packageManager": "npm@10.9.2",
@@ -8,22 +8,24 @@
     "node": ">=22.16.0"
   },
   "scripts": {
-    "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "check": "npm run format:check && npm run check:static && npm test && npm run typecheck && npm run build",
     "check:static": "node scripts/check-static.mjs",
-    "check": "npm run test && npm run check:static && npm run typecheck && npm run build",
-    "test:db": "bash scripts/test-db.sh",
-    "check:syntax": "node scripts/check-syntax.mjs",
-    "check:pure-types": "node scripts/check-pure-types.mjs",
-    "db:prepare": "node scripts/prepare-migrations.mjs",
-    "db:check-prepared": "node scripts/prepare-migrations.mjs --check",
-    "release:check": "npm run db:check-prepared && npm run check && npm run test:db && npm audit --audit-level=high",
+    "db:schema": "bash scripts/db-schema.sh",
+    "db:schema:check": "bash scripts/db-schema.sh --check",
+    "dev": "next dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "ops": "node --experimental-strip-types scripts/ops.mjs",
+    "release:check": "npm run check && npm run test:db && npm run db:schema:check && npm audit --audit-level=high",
+    "start": "next start",
+    "test": "node --experimental-strip-types --import ./tests/support/register.mjs --test tests/*.test.mjs",
+    "test:db": "bash scripts/test-db.sh",
+    "test:db:supabase": "bash scripts/test-supabase-local.sh",
     "test:e2e:local": "node --experimental-strip-types scripts/e2e-local.mjs --out verification/e2e_local.json",
-    "test:db:supabase": "bash scripts/test-supabase-local.sh"
+    "test:ops:local": "node --experimental-strip-types --import ./tests/support/register.mjs scripts/test-ops-local.mjs",
+    "typecheck": "tsc --noEmit",
+    "verify:local": "bash scripts/verify-local.sh"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",
@@ -39,6 +41,7 @@
     "@types/node": "22.15.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.2.3",
+    "prettier": "3.9.9",
     "typescript": "5.8.3"
   },
   "overrides": {

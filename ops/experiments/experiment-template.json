@@ -4,25 +4,15 @@
   "hypothesis": "Theme and tone may affect subsequent activation, not only engagement.",
   "durationDays": 14,
   "postsPerDay": 2,
-  "variedFactors": [
-    "topic",
-    "tone"
-  ],
+  "variedFactors": ["topic", "tone"],
   "fixedFactors": {
     "method": "numerology",
     "language": "en",
     "postingTimes": "owner-approved UTC times required"
   },
   "primaryOutcome": "matured consented activation_24h_pct",
-  "diagnostics": [
-    "observed_post_24h_engagement_pct",
-    "follower_endpoint_delta"
-  ],
-  "guardrails": [
-    "no coercive predictions",
-    "no unknown publish retry",
-    "no fabricated historical snapshots"
-  ],
+  "diagnostics": ["observed_post_24h_engagement_pct", "follower_endpoint_delta"],
+  "guardrails": ["no coercive predictions", "no unknown publish retry", "no fabricated historical snapshots"],
   "evidence": [],
   "interpretation": null,
   "nextExperiment": null

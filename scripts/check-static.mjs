@@ -1,42 +1,131 @@
-import {readFileSync,readdirSync,existsSync} from 'node:fs';
+// Repository contracts that need no database or network. This does NOT execute SQL, typecheck or build.
 import {createHash} from 'node:crypto';
+import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
-const root=process.cwd();
-const read=p=>readFileSync(path.join(root,p),'utf8');
-const assert=(ok,message)=>{if(!ok)throw new Error(message);};
-const hash=p=>createHash('sha256').update(readFileSync(path.join(root,p))).digest('hex');
-const pkg=JSON.parse(read('package.json')),plugin=JSON.parse(read('.codex-plugin/plugin.json'));
-assert(/^0\.2\.\d+$/.test(pkg.version)&&plugin.version===pkg.version,'Version mismatch');
-assert(plugin.skills==='./skills/','Customer skill scope changed');
-assert(!JSON.stringify(plugin).includes('fortune-ops'),'Operator skill leaked into customer plugin');
-const mf=JSON.parse(read('supabase/migration-manifest.json'));
-assert(hash('supabase/migrations/'+mf.initial.file)===mf.initial.sha256,'Historical SQL changed');
-assert(mf.templates.length===5,'Expected 5 additive SQL stages');
-let sql=read('supabase/migrations/'+mf.initial.file);
-for(const t of mf.templates){const f='supabase/migration-templates/'+t.file;assert(hash(f)===t.sha256,'Unreviewed template '+t.file);const s=read(f);assert(/\bBEGIN;/.test(s)&&s.trim().endsWith('COMMIT;'),'Migration transaction missing');sql+='\n'+s;}
-for(const f of mf.forwardFixes??[]){const p='supabase/migrations/'+f.file;assert(hash(p)===f.sha256,'Forward fix changed '+f.file);const s=read(p);assert(/\bBEGIN;/.test(s)&&s.trim().endsWith('COMMIT;'),'Migration transaction missing');sql+='\n'+s;}
-const lower=sql.toLowerCase();
-const tables=['user_access','subscriptions','usage_counters','billing_events','fortune_posts','post_metric_snapshots','account_metric_snapshots','automation_runs','user_readings','funnel_events','reading_feedback'];
-for(const t of tables){assert(lower.includes(`create table public.${t} (`),'Missing table '+t);assert(lower.includes(`alter table public.${t} enable row level security`),'Missing RLS '+t);}
-assert((lower.match(/create table public\./g)??[]).length===11,'Unexpected app table count');
-assert(!lower.includes('security definer'),'Review required for SECURITY DEFINER');
-assert(lower.includes('security_invoker=true'),'Views must use invoker permissions');
-assert(lower.includes('foreign key (user_id, reading_id)'),'Feedback ownership constraint missing');
-assert(lower.includes('unique (user_id, request_id)'),'Request deduplication missing');
-assert(lower.includes('capture_key uuid not null'),'Immutable snapshot capture identity missing');
-assert(lower.includes('request_fingerprint'),'Operational fingerprint missing');
-assert(!/\b(prompt_text|birth_date|birth_time|birth_place|journal_text|google_access_token)\s+(text|jsonb|date|timestamp)/i.test(sql),'Forbidden personal data column');
-assert(lower.includes('from public,anon,authenticated,service_role'),'Legacy quota grant not removed');
-const ops=read('app/api/ops/route.ts');assert(ops.includes('verifyOps(')&&ops.includes('.strict()'),'Operator auth or input validation missing');
-const mcp=read('app/api/mcp/route.ts');
-assert(!mcp.includes('publishPost')&&!mcp.includes('OPS_HMAC_KEY'),'Operator functionality leaked to MCP');
-assert((mcp.match(/server\.registerTool\(/g)??[]).length===7,'Expected seven customer tools');
-assert(mcp.includes('explicitUserRequest:z.literal(true)'),'Explicit feedback request missing');
-assert(!read('app/api/billing/webhook/route.ts').includes('.rpc('),'Live billing must remain disabled');
-assert(read('app/api/billing/webhook/route.ts').includes('501'),'Billing fail-closed status missing');
-assert(read('.env.example').includes('PRODUCT_ANALYTICS_ENABLED=false')&&read('.env.example').includes('THREADS_PUBLISH_ENABLED=false'),'Unsafe default flags');
-for(const f of ['AGENTS.md','Agent.md','CLAUDE.md','docs/UPGRADE.md','docs/DEFINITION_OF_DONE.md','docs/DATA_BOUNDARIES.md','docs/KPI_DICTIONARY.md','docs/THREADS_OPERATIONS.md','docs/BUILD_STATUS.md','supabase/tests/v02_security.sql','supabase/tests/v02_retention_kpis.sql'])assert(read(f).length>50,'Missing '+f);
-const fixtures=readdirSync('supabase/migrations').filter(x=>x.endsWith('.sql'));
-assert(fixtures.includes(mf.initial.file),'Initial migration absent');
-assert(!existsSync('.env.local'),'Do not package real env files');
-console.log(`PASS: static contracts (11 tables, 5 additive SQL stages + ${(mf.forwardFixes??[]).length} forward fix(es), 7 MCP tools). This does NOT execute SQL, typecheck dependencies, build, or exercise real providers.`);
+
+const root = process.cwd();
+const read = (file) => readFileSync(path.join(root, file), 'utf8');
+const sha256 = (file) =>
+  createHash('sha256')
+    .update(readFileSync(path.join(root, file)))
+    .digest('hex');
+const failures = [];
+const check = (ok, message) => {
+  if (!ok) failures.push(message);
+};
+
+// ----- Packaging -----
+const pkg = JSON.parse(read('package.json'));
+const plugin = JSON.parse(read('.codex-plugin/plugin.json'));
+check(plugin.version === pkg.version, 'package.json and .codex-plugin/plugin.json versions differ');
+check(plugin.skills === './skills/', 'customer plugin must only ship ./skills/');
+check(!JSON.stringify(plugin).includes('fortune-ops'), 'operator skill leaked into the customer plugin');
+check(!existsSync(path.join(root, '.env.local')), 'do not keep .env.local in the project root');
+const envExample = read('.env.example');
+for (const flag of [
+  'PRODUCT_ANALYTICS_ENABLED',
+  'OPERATIONS_ENABLED',
+  'THREADS_INSIGHTS_ENABLED',
+  'THREADS_PUBLISH_ENABLED',
+]) {
+  check(envExample.includes(`${flag}=false`), `.env.example must default ${flag}=false`);
+}
+
+// ----- Migrations -----
+const migrationDir = 'supabase/migrations';
+const migrations = readdirSync(path.join(root, migrationDir))
+  .filter((name) => name.endsWith('.sql'))
+  .sort();
+check(migrations.length > 0, 'no migrations found');
+for (const name of migrations) {
+  check(
+    /^\d{14}_[a-z0-9_]+\.sql$/.test(name),
+    `migration name must be <14-digit timestamp>_<slug>.sql: ${name}`,
+  );
+  const sql = read(`${migrationDir}/${name}`);
+  check(
+    /^BEGIN;$/m.test(sql) && sql.trim().endsWith('COMMIT;'),
+    `migration must be one transaction: ${name}`,
+  );
+  check(
+    !/security\s+definer/i.test(sql.replace(/--.*$/gm, '')),
+    `SECURITY DEFINER needs a dedicated review: ${name}`,
+  );
+  check(
+    !/\b(birth_date|birth_time|birth_place|journal_text|prompt_text|question_text|google_access_token|sheet_id)\s+(text|jsonb|date|timestamp)/i.test(
+      sql,
+    ),
+    `forbidden personal-data column in ${name}`,
+  );
+}
+const timestamps = migrations.map((name) => name.slice(0, 14));
+check(new Set(timestamps).size === timestamps.length, 'duplicate migration timestamp');
+
+const {applied} = JSON.parse(read('supabase/applied-migrations.json'));
+for (const [name, hash] of Object.entries(applied)) {
+  const file = `${migrationDir}/${name}`;
+  check(existsSync(path.join(root, file)), `remotely applied migration is missing: ${name}`);
+  if (existsSync(path.join(root, file)))
+    check(sha256(file) === hash, `remotely applied migration was edited: ${name}`);
+}
+const newestApplied = Object.keys(applied).sort().at(-1);
+if (newestApplied) {
+  for (const name of migrations) {
+    check(name in applied || name > newestApplied, `new migration sorts before applied history: ${name}`);
+  }
+}
+
+// ----- Boundaries between the customer MCP and the operator API -----
+const sourceFiles = (dir) =>
+  readdirSync(path.join(root, dir), {withFileTypes: true, recursive: true})
+    .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
+    .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)).replaceAll('\\', '/'));
+const mcpSources = ['app/api/mcp/route.ts', ...sourceFiles('src/mcp')];
+for (const file of mcpSources) {
+  const text = read(file);
+  check(
+    // Imports, not comments: the MCP must not import operator modules or the Threads client.
+    !/from\s+['"][^'"]*(src\/ops\/|integrations\/threads)|OPS_HMAC_KEY/.test(text),
+    `operator code reachable from the MCP: ${file}`,
+  );
+}
+const toolNames = [...read('src/mcp/tools.ts').matchAll(/^\s+name: '([a-z_]+)',$/gm)].map(
+  (match) => match[1],
+);
+check(toolNames.length === 7, `expected 7 customer MCP tools, found ${toolNames.length}`);
+check(
+  toolNames.every((name) => !/publish|ops|sql|billing|grant/.test(name)),
+  'operator-like tool name in the customer MCP',
+);
+check(
+  /explicitUserRequest:\s*z\.literal\(true\)/.test(read('src/mcp/schemas.ts')),
+  'optional analytics tools must require explicitUserRequest',
+);
+const opsRoute = read('app/api/ops/route.ts');
+check(opsRoute.includes('verifyOps('), 'ops route must verify the HMAC signature');
+check(/\.strict\(\)/.test(read('src/ops/commands.ts')), 'ops commands must be strict schemas');
+
+// ----- Billing stays fail-closed until a real signed adapter exists -----
+const webhook = read('app/api/billing/webhook/route.ts');
+check(
+  webhook.includes('501') && !webhook.includes('.rpc('),
+  'billing webhook must stay 501 with no DB writes',
+);
+// Paid checkout stays off until a provider adapter is approved: no other billing route may exist.
+check(
+  readdirSync(path.join(root, 'app/api/billing')).join() === 'webhook',
+  'no billing route besides the 501 webhook (checkout is disabled until a provider is approved)',
+);
+check(
+  JSON.parse(read('.mcp.json')).mcpServers?.['fortune-journal']?.type === 'http',
+  '.mcp.json must declare the remote server with type "http"',
+);
+check(envExample.includes('WEB_SESSION_HMAC_KEY='), '.env.example must list WEB_SESSION_HMAC_KEY');
+
+if (failures.length) {
+  for (const failure of failures) console.error(`FAIL: ${failure}`);
+  process.exit(1);
+}
+console.log(
+  `PASS: static contracts (${migrations.length} migration(s), ${Object.keys(applied).length} applied remotely, ${toolNames.length} MCP tools).`,
+);

@@ -15,7 +15,9 @@ Checked for implementation design on 2026-10-14. Retrieved documentation can lag
 - Vercel MCP: https://vercel.com/docs/mcp/deploy-mcp-servers-to-vercel
   Endpoint adapter and auth examples. Inherited exact SDK/package versions have NOT been installed/peer-verified here.
 - Supabase CLI: https://supabase.com/docs/reference/cli/introduction
-  Use real `migration new` and reviewed history. No synthetic timestamps are supplied for added stages.
+  `migration new` generates timestamps; `db reset`, `db advisors`, `db lint` used locally.
+- MCP authorization (2026-07-28): https://modelcontextprotocol.io/specification/latest/basic/authorization
+  Checked 2026-10-16: servers MUST validate that tokens were issued for them as the audience (RFC 8707); clients MUST send `resource`; Dynamic Client Registration is deprecated in favor of Client ID Metadata Documents. Supabase-issued tokens carry `aud=authenticated` regardless of `resource` (local probe, `verification/perf/resource_audience.json`), so this is tracked as BLOCKED in docs/SECURITY.md.
 
 ## User-provided business proposal
 
@@ -27,7 +29,7 @@ Co–Star / CHANI / The Pattern / Astrotalk / LINE占いの5事例から導い�
 
 Free/Trial/Premiumの限度、14日Trial、価格候補$4.99、90/400日保持、hourly cron・2h計測窓、1日2投稿は設計仮説。法律・ホスト規約・Meta権限・支払事業者の承認・顧客同意を代替しない。
 
-## Verified versions (2026-10-15)
+## Verified versions (2026-10-15; Prettier added 2026-10-16)
 
 Checked against the npm registry and the installed packages' own type declarations/READMEs (not memory):
-next 15.5.27, react/react-dom 19.2.3, @modelcontextprotocol/server 2.3.1, mcp-handler 2.3.0 (MCP 2026-07-28 native + 2025 stateless fallback), @supabase/supabase-js 2.117.3 (auth `oauth.getAuthorizationDetails/approveAuthorization/denyAuthorization/listGrants/revokeGrant`), @supabase/ssr 0.12.7, zod 4.2.1, typescript 5.8.3, Supabase CLI 2.120.0, local GoTrue v2.197.0 OAuth 2.1 server (AS metadata at `/auth/v1/.well-known/oauth-authorization-server`, S256 PKCE, DCR, no RFC 7009 revocation endpoint advertised). Hosted Supabase/Vercel behaviour still needs Staging confirmation.
+next 15.5.27, react/react-dom 19.2.3, @modelcontextprotocol/server 2.3.1, mcp-handler 2.3.0 (MCP 2026-07-28 native + 2025 stateless fallback), @supabase/supabase-js 2.117.3 (auth `oauth.getAuthorizationDetails/approveAuthorization/denyAuthorization/listGrants/revokeGrant`), @supabase/ssr 0.12.7, zod 4.2.1, typescript 5.8.3, prettier 3.9.9 (released 2026-09-23), Supabase CLI 2.120.0, local GoTrue v2.197.0 OAuth 2.1 server (AS metadata at `/auth/v1/.well-known/oauth-authorization-server`, S256 PKCE, DCR, no RFC 7009 revocation endpoint advertised). Hosted Supabase/Vercel behaviour still needs Staging confirmation.

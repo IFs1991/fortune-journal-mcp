@@ -1,0 +1,4 @@
+{
+  "description": "Migrations applied to a remote (Staging/Production) database. Listed files are immutable: npm run check:static fails if one changes or if a new migration sorts before the newest listed one. Add entries in the same PR as an approved `supabase db push`. Empty = no remote database exists yet, so the baseline may still be rebuilt.",
+  "applied": {}
+}

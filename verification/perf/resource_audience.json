@@ -1,0 +1,14 @@
+{
+  "ranAt": "2026-10-16T02:53:39.388Z",
+  "requestedResource": "http://localhost:3000/api/mcp",
+  "tokenStatus": 200,
+  "aud": "authenticated",
+  "audienceBoundToResource": false,
+  "issIsProject": true,
+  "hasClientId": true,
+  "asMetadata": {
+    "resource_indicators_supported": null,
+    "client_id_metadata_document_supported": null,
+    "registration_endpoint": true
+  }
+}

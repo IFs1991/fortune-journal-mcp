@@ -3,7 +3,7 @@ name: fortune-journal
 description: Calculate symbolic numerology or tarot, and help a user keep readings and life reflections in their own Google Sheets using their separately connected Google tool.
 ---
 
-# Fortune Journal — customer workflow v0.2.1
+# Fortune Journal — customer workflow v0.3.0
 
 Use only the customer's Fortune Journal MCP and their separately authorized Google connector. No operator tools, credentials, public marketing posts or arbitrary database queries belong here.
 

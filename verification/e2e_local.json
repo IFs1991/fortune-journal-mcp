@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-10-15T06:44:34.079Z",
+  "ranAt": "2026-10-16T03:05:52.832Z",
   "analyticsMode": false,
   "operationsMode": false,
   "target": {
@@ -50,7 +50,7 @@
       "result": "PASS"
     },
     {
-      "name": "Data API: user A sees only own rows, cannot escalate; B cannot see A",
+      "name": "Data API: signed-in users can read or change nothing directly (app-only access)",
       "result": "PASS"
     },
     {

@@ -1,140 +1,152 @@
 {
- "generatedAt": "2026-10-15T06:47:19Z",
- "commit": "f522827",
- "branch": "perf/mcp-communication-optimization",
- "environment": {
-  "os": "MINGW64_NT-10.0-26340 (Windows 11, Git Bash)",
-  "node": "v22.22.2",
-  "npm": "10.9.7",
-  "supabaseCli": "2.120.0",
-  "docker": "29.8.2",
-  "psql": "psql (PostgreSQL) 17.11"
- },
- "ci": {
-  "run": "https://github.com/IFs1991/fortune-journal-mcp/actions/runs/38693864153",
-  "jobs": {
-   "build": "success",
-   "database": "success",
-   "supabase-local": "success"
+  "commit": "fd0d36f",
+  "branch": "refactor/pre-release-baseline",
+  "environment": {
+    "os": "Windows 11 Pro 10.0.26340 + Git Bash",
+    "node": "v22.22.2",
+    "npm": "10.9.7",
+    "supabaseCli": "2.120.0",
+    "psql": "17.11",
+    "testPg": "postgres@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3",
+    "localStack": "fortune-journal-local (network fj_local_net)"
   },
-  "node": "22.16.0",
-  "e2e": {
-   "analyticsOff": "19 passed / 0 failed",
-   "analyticsOn": "20 passed / 0 failed"
-  }
- },
- "results": [
-  {
-   "check": "npm ci (fresh clone)",
-   "command": "rm -rf '<scratchpad>/clean' && git clone -q . '<scratchpad>/clean' && cd '<scratchpad>/clean' && git log --oneline -1 && npm ci --no-fund && npm test 2>&1 | grep -E '^# (pass|fail)' && npm run typecheck && npm run db:check-prepared",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:40:23Z",
-   "log": "npm_ci_clean_clone.log"
-  },
-  {
-   "check": "unit tests",
-   "command": "npm test",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:42:14Z",
-   "log": "unit.log"
-  },
-  {
-   "check": "static contracts",
-   "command": "npm run check:static",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:42:18Z",
-   "log": "static.log"
-  },
-  {
-   "check": "syntax-only",
-   "command": "npm run check:syntax",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:42:21Z",
-   "log": "syntax.log"
-  },
-  {
-   "check": "pure-domain types",
-   "command": "npm run check:pure-types",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:42:25Z",
-   "log": "pure_types.log"
-  },
-  {
-   "check": "full typecheck",
-   "command": "npm run typecheck",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:42:30Z",
-   "log": "typecheck.log"
-  },
-  {
-   "check": "npm audit",
-   "command": "npm audit --audit-level=low",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:42:38Z",
-   "log": "audit.log"
-  },
-  {
-   "check": "shell syntax",
-   "command": "bash -n scripts/test-db.sh && bash -n scripts/test-supabase-local.sh && echo ok",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:42:44Z",
-   "log": "shell_syntax.log"
-  },
-  {
-   "check": "migration integrity",
-   "command": "npm run db:check-prepared && sha256sum supabase/migrations/*.sql && cat supabase/template-lock.json",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:42:45Z",
-   "log": "migration_prepare.log"
-  },
-  {
-   "check": "disposable PG fresh+upgrade",
-   "command": "bash scripts/test-db.sh",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:42:48Z",
-   "log": "db.log"
-  },
-  {
-   "check": "local Supabase SQL suites",
-   "command": "bash scripts/test-supabase-local.sh",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:43:50Z",
-   "log": "supabase_local_sql.log"
-  },
-  {
-   "check": "supabase db lint (local)",
-   "command": "supabase db lint --db-url postgresql://postgres:postgres@127.0.0.1:55422/postgres --level warning </dev/null",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:43:57Z",
-   "log": "supabase_lint_local.log"
-  },
-  {
-   "check": "supabase db advisors (local)",
-   "command": "supabase db advisors --db-url postgresql://postgres:postgres@127.0.0.1:55422/postgres --type all --level info </dev/null",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:44:00Z",
-   "log": "supabase_advisors_local.log"
-  },
-  {
-   "check": "E2E local (analytics+ops off)",
-   "command": "set -a; . '<scratchpad>/fj.env'; set +a; PRODUCT_ANALYTICS_ENABLED=false OPERATIONS_ENABLED=false node --experimental-strip-types scripts/e2e-local.mjs --out verification/e2e_local.json",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:44:10Z",
-   "log": "e2e_local.log"
-  },
-  {
-   "check": "E2E local (analytics+ops on)",
-   "command": "set -a; . '<scratchpad>/fj.env'; set +a; PRODUCT_ANALYTICS_ENABLED=true OPERATIONS_ENABLED=true node --experimental-strip-types scripts/e2e-local.mjs --out verification/e2e_local_analytics_ops.json",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:44:40Z",
-   "log": "e2e_local_analytics_ops.log"
-  },
-  {
-   "check": "production build",
-   "command": "rm -rf .next && env -u APP_ORIGIN -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_TELEMETRY_DISABLED=1 npm run build",
-   "exitCode": 0,
-   "startedAt": "2026-10-15T06:45:11Z",
-   "log": "production_build.log"
-  }
- ]
+  "remoteWrites": "none",
+  "steps": [
+    {
+      "name": "format",
+      "command": "npm run format:check",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:01:58Z",
+      "durationMs": 4152,
+      "log": "verification/format.log"
+    },
+    {
+      "name": "static",
+      "command": "npm run check:static",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:02:03Z",
+      "durationMs": 1458,
+      "log": "verification/static.log"
+    },
+    {
+      "name": "unit",
+      "command": "npm test",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:02:04Z",
+      "durationMs": 3081,
+      "log": "verification/unit.log"
+    },
+    {
+      "name": "typecheck",
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:02:08Z",
+      "durationMs": 4322,
+      "log": "verification/typecheck.log"
+    },
+    {
+      "name": "production_build",
+      "command": "APP_ORIGIN=https://example.invalid NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=compile_only_placeholder NEXT_TELEMETRY_DISABLED=1 npm run build",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:02:12Z",
+      "durationMs": 44280,
+      "log": "verification/production_build.log"
+    },
+    {
+      "name": "audit",
+      "command": "npm audit --audit-level=high",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:02:57Z",
+      "durationMs": 4594,
+      "log": "verification/audit.log"
+    },
+    {
+      "name": "db",
+      "command": "npm run test:db",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:03:02Z",
+      "durationMs": 28230,
+      "log": "verification/db.log"
+    },
+    {
+      "name": "schema_check",
+      "command": "npm run db:schema:check",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:03:31Z",
+      "durationMs": 10214,
+      "log": "verification/schema_check.log"
+    },
+    {
+      "name": "supabase_local_reset",
+      "command": "supabase db reset --local --network-id fj_local_net </dev/null",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:03:50Z",
+      "durationMs": 21904,
+      "log": "verification/supabase_local_reset.log"
+    },
+    {
+      "name": "supabase_local_sql",
+      "command": "npm run test:db:supabase",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:04:13Z",
+      "durationMs": 5975,
+      "log": "verification/supabase_local_sql.log"
+    },
+    {
+      "name": "supabase_lint_local",
+      "command": "supabase db lint --local --level warning </dev/null",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:04:19Z",
+      "durationMs": 2259,
+      "log": "verification/supabase_lint_local.log"
+    },
+    {
+      "name": "supabase_advisors_local",
+      "command": "supabase db advisors --local --type all --level warn --fail-on warn </dev/null",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:04:21Z",
+      "durationMs": 2395,
+      "log": "verification/supabase_advisors_local.log"
+    },
+    {
+      "name": "supabase_advisors_local_info",
+      "command": "supabase db advisors --local --type all --level info </dev/null | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{const i=s.indexOf(\"{\");const r=JSON.parse(s.slice(i)).results;for(const x of r)console.log(x.level,x.name,x.detail)})'",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:04:34Z",
+      "durationMs": 2487,
+      "log": "verification/supabase_advisors_local_info.log"
+    },
+    {
+      "name": "e2e_build",
+      "command": "set -a && . /c/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/c367663d-100d-48b4-baaf-ae6e1114fff8/scratchpad/fj.env && set +a && npm run build",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:04:39Z",
+      "durationMs": 42345,
+      "log": "verification/e2e_build.log"
+    },
+    {
+      "name": "e2e_local",
+      "command": "set -a && . /c/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/c367663d-100d-48b4-baaf-ae6e1114fff8/scratchpad/fj.env && set +a && PRODUCT_ANALYTICS_ENABLED=false OPERATIONS_ENABLED=false node --experimental-strip-types scripts/e2e-local.mjs --out verification/e2e_local.json",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:05:37Z",
+      "durationMs": 14862,
+      "log": "verification/e2e_local.log"
+    },
+    {
+      "name": "e2e_local_analytics_ops",
+      "command": "set -a && . /c/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/c367663d-100d-48b4-baaf-ae6e1114fff8/scratchpad/fj.env && set +a && PRODUCT_ANALYTICS_ENABLED=true OPERATIONS_ENABLED=true node --experimental-strip-types scripts/e2e-local.mjs --out verification/e2e_local_analytics_ops.json",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:06:10Z",
+      "durationMs": 18253,
+      "log": "verification/e2e_local_analytics_ops.log"
+    },
+    {
+      "name": "npm_ci_clean_clone",
+      "command": "cd /c/Users/seekf/AppData/Local/Temp/claude/C--Users-seekf-Desktop-fortune-journal-mcp/c367663d-100d-48b4-baaf-ae6e1114fff8/scratchpad/clone && git log --oneline -1 && npm ci 2>&1 | tail -4 && npm run format:check && npm run check:static && npm test 2>&1 | grep -E '^# (tests|pass|fail)' && npm run typecheck",
+      "exitCode": 0,
+      "startedAt": "2026-10-16T03:06:39Z",
+      "durationMs": 91470,
+      "log": "verification/npm_ci_clean_clone.log"
+    }
+  ]
 }

@@ -1,68 +1,51 @@
-# Fortune Journal MCP — v0.2.1 Growth & Privacy
+# Fortune Journal MCP
 
-**TypeScript / Vercel / Supabase。顧客の占い手帳は顧客自身のGoogle Sheetsへ。**
+英語圏向けの小型占術MCPサーバー（TypeScript / Next.js on Vercel / Supabase）。顧客のChatGPT・Claudeが会話を、顧客自身のGoogle Sheetsが手帳を担当し、このサーバーは数秘術とタロットの決定的計算と利用権の管理だけを行う。鑑定本文・相談・出生情報・日誌は保存しない。
 
-追加提案を、投稿運用・集客計測・任意フィードバック・課金台帳・保守に統合したソース一式です。管理ダッシュボード、Railway、独自LLM推論基盤は追加しません。
+**状態: v0.3.1、ローカル検証済み（A: GO）。Staging未作成、未公開（B/C: BLOCKED / NO-GO）。** 判定と根拠は [docs/DEFINITION_OF_DONE.md](docs/DEFINITION_OF_DONE.md)。
 
-> **リリース状態：ローカルDeploy-Ready／Staging未作成。** lockfile・full型検査・Nextビルド・公式CLIでのmigration化・使い捨てPostgresと実SupabaseイメージでのRLS/同時実行テスト・ローカルSupabase stackでのOAuth 2.1+MCP E2Eは実行済み（[検証記録](verification/RESULTS.md)、[DoD](docs/DEFINITION_OF_DONE.md)）。Staging project作成・実Googleログイン・ChatGPT/Claude実ホスト・顧客Sheets・Meta実機・決済は未実施です。既存アカウント・本番DBへの変更、投稿・課金・デプロイは行っていません。
+## 最初に読むもの
 
-## 変更の要点
+| ファイル | 内容 |
+|---|---|
+| [AGENTS.md](AGENTS.md) | ルールの正本（承認境界・不変条件・変更手順・報告） |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 構成図、レイヤー、7ツールとリクエスト経路 |
+| [docs/DATABASE.md](docs/DATABASE.md) | 表・RPCの設計理由。現在の完成形は [docs/generated/DB_CATALOG.md](docs/generated/DB_CATALOG.md)（生成物） |
+| [docs/SECURITY.md](docs/SECURITY.md) | 認証・権限・データ境界・残留リスク |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | ローカル検証、Staging構築、デプロイ、監視、復旧、Threads運営 |
+| [docs/DEFINITION_OF_DONE.md](docs/DEFINITION_OF_DONE.md) | 現在の状態とgate |
 
-- **4 → 11テーブル**。元の4テーブルを残し、運用4＋製品計測3を追加。`billing_events`は拡張し、別台帳と二重にしません。
-- **5本の追加マイグレーションSQL**。旧SQLはバイト単位で保持。実際のタイムスタンプは公式Supabase CLIで生成します。
-- 顧客の鑑定本文・相談全文・出生情報・Sheets内容／ID／トークンは保存しません。`user_readings`は90日間の最小限のリクエスト台帳です。
-- 同一`requestId`の再試行は、DBトランザクションで利用回数を二重消費しない設計。別入力でのID再利用は拒否します。
-- Threadsの投稿公開は**本文ハッシュへの承認＋公開スイッチ**が必要。結果不明の公開を自動再投稿しません。
-- 投稿24/72/168時間の**実際の観測日時**を保存。未取得はNULL、フォロワーはストックとして分離。
-- 計測は初期OFF＋ユーザー同意。関心テーマは別同意。撤回時に任意イベント・評価を削除、テーマを消去します。
-- 顧客MCPと運営HMAC APIを分離。実決済・署名アダプターは未接続のまま閉じています。
+その他: [KPI定義](docs/KPI_DICTIONARY.md) · [性能測定](docs/PERFORMANCE.md) · [課金adapter方針](docs/BILLING_PROVIDER.md) · [plugin提出](docs/PLUGIN_SUBMISSION.md) · [出典](docs/SOURCES.md) · [変更履歴](docs/CHANGELOG.md)
 
-## 最短の引継ぎ手順
-
-1. [AGENTS.md](AGENTS.md)、[UPGRADE.md](docs/UPGRADE.md)、[DoD](docs/DEFINITION_OF_DONE.md)を読む。
-2. Node 22.16+で `npm ci`（正規lockfile同梱）。
-3. **別の開発／Stagingプロジェクト**と秘密値を用意。Worksの本番を使わない。
-4. Docker・公式Supabase CLI（2.120.0で検証）・psqlを用意し、次を実行する。いずれもローカルのみで、リモートDBには接続しない。
+## ローカルで動かす
 
 ```bash
-npm run release:check     # migration整合・unit・static・typecheck・build・使い捨てPG・audit
-supabase start            # 専用ローカルstack（554xx）
-npm run test:db:supabase  # 実SupabaseイメージでSQLスイート
-node --experimental-strip-types scripts/e2e-local.mjs  # appをlocalhost:3000で起動後。OAuth 2.1/PKCE/同意/MCP/RLS
+npm ci
+npm run release:check                      # format・static・unit・typecheck・build・使い捨てPG・schema差分・audit
+supabase start --network-id fj_local_net   # 専用ローカルstack（project_id fortune-journal-local、554xx）
+npm run test:db:supabase                   # 実SupabaseイメージでSQLスイート
 ```
 
-Stagingへの適用は [検証・デプロイ手順](docs/DEPLOYMENT_AND_TESTS.md) の順（`db push --dry-run` → 承認 → `db push`）。migrationは8本（旧1 + v0.2の5 + forward-fix 2）。
+E2E・ベンチマークの手順は [docs/OPERATIONS.md](docs/OPERATIONS.md) §1。リモート（Supabase/Vercel/Google/Meta）への書込みは承認制（AGENTS.md §2）。**mainへのmergeはVercel Production deployになる。**
 
 ## 配置
 
 ```text
-app/login, app/oauth/consent       Googleログイン・同意・必要なアカウント操作だけ
-app/api/mcp                       顧客向け7ツール
-app/api/ops                       運営者専用・HMAC署名付きコマンド
-app/api/cron/maintenance           保持期限・Insights収集。投稿は実行しない
-src/domain                        純粋な占術・入力検証・指標・署名
-src/integrations/threads.ts        Meta接続。書き込みの自動再試行なし
-src/lib                           DBトランザクション・運営処理
-supabase/migration-templates       5本の追加SQLの原本（hashで生成物と対応）
-supabase/migrations                旧履歴＋CLI生成の5本＋forward-fix 06/07
-supabase/tests                    RLS・二重実行・課金・KPI・保持期限のSQLテスト
-ops/                              運営専用スキル・コマンド例・実験計画
-skills/fortune-journal             顧客用スキルのみ
-verification/                     実行済み／未実行を分けた記録
+app/                 HTTP入口だけ（/api/mcp, /api/ops, /api/cron, /api/account, /login, /oauth/consent）
+src/mcp/             顧客向け7ツール（tools.ts が一覧、schemas.ts が入出力契約）
+src/ops/             運営者専用API（commands.ts が一覧）: 投稿・Insights・run履歴・レポート・保守
+src/account.ts       同意設定・エクスポート・アカウント削除
+src/domain/          純粋ロジック（数秘術・タロット・journal・OAuth claim・HMAC・Threads正規化）
+src/integrations/    Threads API client
+src/lib/             設定・秘密・Supabase client・bearer検証・計測
+supabase/migrations/ 唯一の適用元（baseline 1本）。schema.sql は生成物
+supabase/tests/      SQLスイート（権限・計算・同意・課金・運営・保持）
+scripts/             テスト・E2E・ベンチ・schema生成・運営CLI
+ops/                 運営専用スキル・コマンド例・実験記録（顧客pluginに含めない）
+skills/              顧客用スキル
+verification/        実行証拠（実行したものだけPASS）
 ```
 
-## P0 / P1 / P2
+## 商品仮説（コード上の正本は `fj_record_calculation`）
 
-|段階|利用できるソース機能|有効化条件|
-|---|---|---|
-|P0 Threads実験|投稿管理、承認公開、過去投稿のページ取込、Insights収集、運営API|Meta権限・実機確認、OPS設定。公開は追加スイッチ|
-|P1 プラグイン|数秘術・タロット、割当量、任意計測、評価、エクスポート・削除|Google/MCP OAuth・RLS実機。計測は二重の許可|
-|P2 決済|正規化台帳、重複排除、順序制御、MRR・入出金の別集計|業種承認、実署名検証・照合・解約の実装。未完了|
-
-無料3回/ISO週、14日Trial100回/日/占術、Premium200回/日/占術は**商品仮説**です。Trialはログイン時ではなく初回計算時に開始します。利用枠はAIから変更できません。
-
-## 必読
-
-[DB/RLS](docs/DB_RLS_DESIGN.md) · [KPI](docs/KPI_DICTIONARY.md) · [Threads運用](docs/THREADS_OPERATIONS.md) · [データ境界](docs/DATA_BOUNDARIES.md) · [検証・デプロイ](docs/DEPLOYMENT_AND_TESTS.md) · [出典と未確認事項](docs/SOURCES.md)
-
-顧客のAIがSheetsに書いたことも、顧客側の推論コストも、自社サーバーからは確認できません。申告を実測に、NULLを0に、解釈を予測精度に変えないことがこの実装の原則です。
+Free: 数秘術3回/ISO週（タロットなし）。Trial: 初回計算から14日、各100回/UTC日。Premium: 各200回/UTC日（検証済み契約のみ、決済は未接続）。数値は仮説で、AIから変更できない。
