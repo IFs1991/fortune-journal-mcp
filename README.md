@@ -2,7 +2,7 @@
 
 英語圏向けの小型占術MCPサーバー（TypeScript / Next.js on Vercel / Supabase）。顧客のChatGPT・Claudeが会話を、顧客自身のGoogle Sheetsが手帳を担当し、このサーバーは数秘術とタロットの決定的計算と利用権の管理だけを行う。鑑定本文・相談・出生情報・日誌は保存しない。
 
-**状態: v0.3.0、ローカルでDeploy-Ready。Staging未作成、未公開。** 判定と根拠は [docs/DEFINITION_OF_DONE.md](docs/DEFINITION_OF_DONE.md)。
+**状態: v0.3.1、ローカル検証済み（A: GO）。Staging未作成、未公開（B/C: BLOCKED / NO-GO）。** 判定と根拠は [docs/DEFINITION_OF_DONE.md](docs/DEFINITION_OF_DONE.md)。
 
 ## 最初に読むもの
 
