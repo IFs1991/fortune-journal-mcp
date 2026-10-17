@@ -4,19 +4,57 @@ import {safeNextPath, sameOriginNavigation, sameOriginPost} from '../src/lib/url
 
 const APP = 'https://app.example';
 
-test('reject open redirects and preserve safe consent route', () => {
+test('safe consent route survives login; the result is always same-origin', () => {
   const target = '/oauth/consent?authorization_id=abc123';
   assert.equal(safeNextPath(target), target);
-  for (const x of [
+  assert.equal(safeNextPath('/login'), '/login');
+  assert.equal(safeNextPath(null), '/login');
+});
+
+test('open-redirect vectors (control chars, backslashes, encodings, schemes) never leave the origin', () => {
+  const vectors = [
     '//evil.example',
     '/\\evil.example',
+    '\\\\evil.example',
     'https://evil.example',
     '/%2F%2Fevil.example',
+    '/%2f/evil.example',
+    '/%252F%252Fevil.example',
+    '/%5Cevil.example',
+    '/%5cevil.example',
+    '/%255Cevil.example',
+    '/\t/evil.example',
+    '/\n/evil.example',
+    '/\r/evil.example',
+    '/%09/evil.example',
+    '/%0a/evil.example',
+    '/%00/evil.example',
+    '/\u0000/evil.example',
+    '/ /evil.example',
+    '/ /evil.example',
+    '/　/evil.example',
     '/foo\r\nLocation:evil',
     'javascript:alert(1)',
-  ])
-    assert.equal(safeNextPath(x), '/login');
+    '/javascript:alert(1)',
+    '/oauth/consent?authorization_id=abc123&next=//evil.example',
+    '/oauth/consent?authorization_id=abc123#//evil.example',
+    '/oauth/consent?authorization_id=abc123&authorization_id=def456',
+    '/oauth/consent?authorization_id=../../x',
+    '/oauth/consent/../../%2F%2Fevil.example',
+    '/@evil.example',
+    '/x'.repeat(600),
+  ];
+  for (const value of vectors) {
+    const out = safeNextPath(value);
+    assert.ok(out === '/login' || out.startsWith('/oauth/consent?authorization_id='), JSON.stringify(value));
+    // Whatever comes out, browsers and URL parsers resolve it to our origin.
+    assert.equal(new URL(out, APP).origin, APP, JSON.stringify(value));
+    assert.doesNotMatch(out, /[\s\\]|%(?![0-9A-F]{2})/i, JSON.stringify(value));
+  }
+  assert.equal(safeNextPath('/\t/evil.example'), '/login');
+  assert.equal(safeNextPath('/%5Cevil.example'), '/login');
 });
+
 const post = (headers, method = 'POST') => new Request(`${APP}/api/x`, {method, headers});
 const form = {'content-type': 'application/x-www-form-urlencoded'};
 
