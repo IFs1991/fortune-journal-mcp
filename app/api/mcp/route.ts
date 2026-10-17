@@ -3,6 +3,7 @@ import {readBoundedText} from '@/src/domain/security';
 import {appOrigin, mcpAllowedOrigins} from '@/src/lib/env';
 import {verifyOAuthBearer} from '@/src/lib/oauth';
 import {runWithRequestMetrics} from '@/src/lib/perf';
+import {limitMcp} from '@/src/lib/rate-limit';
 import {mcpRequestCheck} from '@/src/lib/urls';
 import {registerTools, SERVER_INSTRUCTIONS} from '@/src/mcp/tools';
 
@@ -24,6 +25,8 @@ async function authenticated(request: Request): Promise<Response> {
   const check = mcpRequestCheck(request, origin, mcpAllowedOrigins());
   if (check === 'forbidden_origin') return Response.json({error: 'FORBIDDEN_ORIGIN'}, {status: 403});
   if (check === 'misdirected_host') return Response.json({error: 'MISDIRECTED_REQUEST'}, {status: 421});
+  const limited = limitMcp(request);
+  if (limited) return limited;
   let bounded = request;
   if (request.method === 'POST') {
     try {

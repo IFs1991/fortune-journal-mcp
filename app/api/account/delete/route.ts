@@ -4,6 +4,7 @@ import {readBoundedText} from '@/src/domain/security';
 import {appOrigin} from '@/src/lib/env';
 import {sameOriginPost} from '@/src/lib/urls';
 import {clearWebSessionBinding, webSession} from '@/src/lib/web-session';
+import {limitWeb} from '@/src/lib/rate-limit';
 
 const FAILURES = {
   billing_open: [409, 'Cancel active or pending billing agreements before deleting your account.'],
@@ -14,6 +15,8 @@ const FAILURES = {
 } as const;
 
 export async function POST(request: Request) {
+  const limited = limitWeb(request);
+  if (limited) return limited;
   if (!sameOriginPost(request, appOrigin())) return new Response('Forbidden', {status: 403});
   let form: URLSearchParams;
   try {

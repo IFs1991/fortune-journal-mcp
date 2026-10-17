@@ -4,7 +4,10 @@ import {safeNextPath} from '@/src/lib/urls';
 import {readReferral} from '@/src/domain/security';
 import {appOrigin} from '@/src/lib/env';
 import {bindWebSession} from '@/src/lib/web-session';
+import {limitWeb} from '@/src/lib/rate-limit';
 export async function GET(request: Request) {
+  const limited = limitWeb(request);
+  if (limited) return limited;
   const url = new URL(request.url),
     code = url.searchParams.get('code'),
     next = safeNextPath(url.searchParams.get('next'));

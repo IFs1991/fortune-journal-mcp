@@ -2,11 +2,14 @@ import {exportPage, parseExportRequest} from '@/src/account';
 import {appOrigin} from '@/src/lib/env';
 import {sameOriginNavigation} from '@/src/lib/urls';
 import {webSession} from '@/src/lib/web-session';
+import {limitWeb} from '@/src/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  const limited = limitWeb(request);
+  if (limited) return limited;
   if (!sameOriginNavigation(request, appOrigin())) return Response.json({error: 'FORBIDDEN'}, {status: 403});
   const session = await webSession();
   if (!session) return Response.json({error: 'UNAUTHORIZED'}, {status: 401});

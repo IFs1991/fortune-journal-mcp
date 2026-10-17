@@ -3,10 +3,13 @@ import {readBoundedText} from '@/src/domain/security';
 import {appOrigin} from '@/src/lib/env';
 import {sameOriginPost} from '@/src/lib/urls';
 import {webSession} from '@/src/lib/web-session';
+import {limitWeb} from '@/src/lib/rate-limit';
 
 /** Revoke one connected AI app. Supabase marks consent revoked, deletes that client's sessions and refresh tokens;
  * /api/mcp re-verifies every bearer with Auth, so its access tokens stop working immediately. */
 export async function POST(req: Request) {
+  const limited = limitWeb(req);
+  if (limited) return limited;
   if (!sameOriginPost(req, appOrigin())) return new Response('Forbidden', {status: 403});
   let clientId: string | null;
   try {
