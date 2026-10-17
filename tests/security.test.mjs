@@ -9,6 +9,7 @@ import {
   readReferral,
   readBoundedText,
   requireSecret,
+  webSessionBinding,
 } from '../src/domain/security.ts';
 const key = 'a'.repeat(64),
   ts = '1791936000',
@@ -58,5 +59,19 @@ test('bounded streaming body limit does not trust Content-Length', async () => {
   assert.equal(
     await readBoundedText(new Request('https://example.test', {method: 'POST', body: 'ok'}), 10),
     'ok',
+  );
+});
+
+test('web-session binding is keyed, bound to user and session, and needs a real secret', () => {
+  const session = '2f0c7a1e-6c1d-4e47-9a0e-0c6d9b1f2a3b';
+  const value = webSessionBinding(key, id, session);
+  assert.match(value, /^[a-f0-9]{64}$/);
+  assert.equal(webSessionBinding(key, id, session), value);
+  assert.notEqual(webSessionBinding('b'.repeat(64), id, session), value);
+  assert.notEqual(webSessionBinding(key, '206a4935-79ed-4e58-9804-841a85095caa', session), value);
+  assert.notEqual(webSessionBinding(key, id, '3f0c7a1e-6c1d-4e47-9a0e-0c6d9b1f2a3b'), value);
+  assert.throws(
+    () => webSessionBinding('REPLACE_WITH_64_HEX_CHARACTERS', id, session),
+    /SECRET_NOT_CONFIGURED/,
   );
 });

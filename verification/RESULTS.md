@@ -1,39 +1,53 @@
-# Verification results — 2026-10-16, branch `refactor/pre-release-baseline`, code commit `fd0d36f`
+# Verification results — 2026-10-17, branch `fix/release-hardening` (base PR #3 `fd57d5e`), code commit `f6897dc`
 
-このファイルは**実行したものだけ**をPASSとする。command・exit code・開始時刻・所要時間は [results.json](results.json)、出力は同名ログ（各ログ先頭に command と commit）。
-環境: Windows 11 + Git Bash、Node 22.22.2、npm 10.9.7、Docker 29.8.2、Supabase CLI 2.120.0、psql 17.11。
-「local stack」= Supabase CLIのローカルstack（Supabase Postgres 17 + GoTrue OAuth 2.1 + PostgREST、project_id `fortune-journal-local`、network `fj_local_net`）。**リモートのSupabase/Vercelには一切書き込んでいない**（read-onlyの `supabase projects list` と `vercel env ls` のみ）。
+このファイルは**実行したものだけ**をPASSとする。各ステップの command・exit code・開始/終了時刻は `local/node24/summary.json` と `local/node22/summary.json`、出力は同ディレクトリの同名ログ（各ログ先頭に command・commit・node）。
+実行: `npm run verify:local -- --npm-ci`（[scripts/verify-local.sh](../scripts/verify-local.sh)）を Node **24.22.0** と **22.22.0** で各1回。どちらも作業ツリーはclean（`workingTreeClean: true`）。
+環境: Linux コンテナ（Claude Code クラウドセッション）、npm 10.9、Docker 29.8.2、Supabase CLI 2.120.0（`supabase/postgres:17.11.0.004`、GoTrue OAuth 2.1、PostgREST）、psql 16 client、使い捨て `postgres:17`（digest固定）。**GitHub Actionsは使っていない。リモートのSupabase/Vercelには読取りも書込みもしていない。**
 
-| 検証 | 結果 | 範囲 / 証拠 |
+## ローカル検証（A: ローカルMVP の根拠）
+
+| 検証 | Node 24 | Node 22 | 範囲 |
+|---|---|---|---|
+| `npm ci` | PASS | PASS | lockfileから再インストール |
+| Prettier / 静的契約 / TypeScript（noUnused*） | PASS | PASS | 7ツール固定、MCP↔ops境界、webhook 501、billing routeはwebhookのみ、`.mcp.json` type http、env例 |
+| 単体テスト | PASS 68/68 | PASS 68/68 | audience・Webセッションclaim・binding・redirect 30ベクタ・CSRF・MCP Origin/Host・rate limit・maintenance分類・resolve_publish・既存全件 |
+| `npm audit --audit-level=high` | PASS（0件） | PASS（0件） | |
+| 使い捨てPG17: 全SQLスイート（auth_hook・billing・calculations・catalog・operations・privacy・retention）、並列（計算10並列・**課金20並列**）、dump/restore | PASS | PASS | `db_pg17.log` |
+| schema snapshot / catalog drift | PASS | PASS | `schema_drift.log` |
+| local Supabase: `db reset`・全SQLスイート（実イメージ）・`db lint`（warning以上で失敗）・`db advisors`（WARN以上で失敗） | PASS | PASS | lintは初回に `fj_access_token_hook` のvolatilityを検出 → 修正（commit `3a44f60`） |
+| 運営状態機械（実DB + Threads偽装）6件 | PASS 6/6 | PASS 6/6 | success / failed→再試行 / unknown→再投稿なし→resolve / 不正応答→resolve published / 成功記録失敗→unknownにID / purge試行切れ→失敗 |
+| Next production build（ローカルstackのenv） | PASS | PASS | |
+| E2E analytics/ops OFF | PASS 21/21 | PASS 21/21 | `e2e_analytics_off.json` |
+| E2E analytics/ops ON | PASS 22/22 | PASS 22/22 | `e2e_analytics_on.json` |
+| read-only smoke（`scripts/smoke-remote.mjs`）をlocalhostに | PASS 8/8 | — | `local/smoke_remote_localhost.txt`（AS metadataはローカルCLIでは path-appended 形式のみ） |
+
+E2Eの追加範囲（v0.3.1）: OAuth tokenの `aud = urn:fortune-journal:mcp`（初回・refresh後）、ブラウザtokenはaud不変 / 有効bearerでも外部Origin 403・`null` Origin 403・外部Host 421・64KiB超 413 / **MCP OAuth tokenを詰めた偽造cookie・偽造cookie+binding・Bearerのみ・binding無しの本物cookie・他人のbindingで export/preferences/revoke/delete/ログイン画面がすべて拒否**、ユーザーが削除されないこと / 本物のbound sessionでもcross-site export 403・text/plain削除403・same-site削除403 / `user_id` クエリで他人の行が出ない / exhausted purgeでcron 500。既存範囲（Google以外のログイン拒否、Data API拒否、DCR+PKCE、同意・拒否・他人による承認不可、Trial開始・replay・conflict・Free上限・Trial後、refresh、revoke、削除後401、ops HMAC、並列draw、停止）は継続。
+
+## 修正前の再現（`before_fix/`、PR #3 `fd57d5e` のコード）
+
+| 不具合 | 修正前の観測 | 証拠 | 修正後 |
+|---|---|---|---|
+| P0 MCP OAuth tokenで本人Web APIを操作 | `export with forged cookie: 200` | `before_fix/e2e_local_on_fd57d5e.log` | 401（同じE2E step PASS） |
+| P0 audience | OAuth tokenの `aud="authenticated"`、事前検査がそれを受理（`true`） | 同上、`redirect_and_audience_fd57d5e.txt` | `aud=urn:fortune-journal:mcp` のみ受理 |
+| P0 open redirect | `"/\t/evil.example"` → `https://evil.example` | `redirect_and_audience_fd57d5e.txt` | `/login` |
+| P0 MCP Origin | 有効bearer + `Origin: https://evil.example` → 200 | `e2e_local_on_fd57d5e.log` | 403 |
+| P1 重複入金通知で新しい契約状態を無視 | `{"duplicate": true, "stateApplied": false}`、Premium付与されず | `billing_fd57d5e.txt`（新しいbilling.sqlをbilling修正前のSQLのlocal stackで実行） | 適用、cashは1件 |
+| P1 削除後の返金が記録されない | `BILLING_BINDING_REQUIRED`、net cash 499 のまま | `billing_fd57d5e.txt` | 記録（user_id NULL）、net 0 |
+| P1 同時刻のplan/価格/解約予約変更を見落とす | `older_or_identical` | `billing_fd57d5e.txt` | `needs_reconciliation`（権限が食い違えばPremium停止） |
+| P1 maintenanceの試行切れが成功 | HTTP 200 `{"results":[]}`、`FJ_MAINTENANCE_OK failures=0` | `maintenance_cron_fd57d5e.txt` | 500、`PURGE_RETRIES_EXHAUSTED retryable:false` |
+| P1 Threadsの曖昧な結果 | container作成失敗（未公開確定）も `publish_unknown` で再試行不能、記録失敗を無視、人の確定手段なし | `ops_state_machines_fd57d5e.txt`（同じ統合テストを旧コードで実行: 0/6） | success / failed / unknown、`recorded`、`resolve_publish` |
+
+`ops_state_machines_fd57d5e.txt` の6件の失敗のうち1件目（成功時）は応答形の変更（`outcome` 追加）だけが理由で、旧コードも公開自体は記録していた。
+
+## 実行していない / できないもの
+
+| 項目 | 状態 | 理由 |
 |---|---|---|
-| fresh clone で `npm ci` + format + static + unit + typecheck | **PASS** | `npm_ci_clean_clone.log` |
-| Prettier check | **PASS** | `format.log` |
-| 静的契約 | **PASS** | migration形式・1トランザクション・DEFINER禁止・禁止列、applied-migrations、MCP↔ops境界、7ツール、ops strict、webhook 501、flags既定OFF — `static.log` |
-| 単体テスト | **PASS 53/0** | 占術（タロット固定値）、日付、URL/Origin、HMAC/参照リンク、OAuth claim、7ツールの登録契約・認証ゲート・失敗コード、opsコマンド、export入力、Threads正規化とmock client、計測 — `unit.log` |
-| full TypeScript（noUnusedLocals/Parameters） | **PASS** | `typecheck.log` |
-| Next production build（CIと同じplaceholder env） | **PASS** | `production_build.log` |
-| `npm audit --audit-level=high` | **PASS 0件** | `audit.log` |
-| 使い捨てPostgres 17 | **PASS** | baseline適用、6スイート、10並列（別request→3+7、同一request→1+9、日付違いtarot→1）、dump/restore後の権限契約と行数 — `db.log` |
-| schema snapshot / catalog の一致 | **PASS** | `schema_check.log` |
-| local stack: `db reset`（baseline適用） | **PASS** | `supabase_local_reset.log` |
-| local stack: 全SQLスイート（実Supabaseイメージ） | **PASS 6/6** | `supabase_local_sql.log` |
-| `supabase db lint`（local） | **PASS** | `supabase_lint_local.log` |
-| `supabase db advisors`（local、WARN以上で失敗） | **PASS（0件）** | `supabase_advisors_local.log`。INFOは未使用index 2（新規DB）とRLS no-policy 10（意図的なdeny-all） — `supabase_advisors_local_info.log` |
-| E2E local（analytics/ops OFF） | **PASS 19/19** | `e2e_local.json`, `e2e_local.log`（app buildは `e2e_build.log`） |
-| E2E local（analytics/ops ON） | **PASS 20/20** | `e2e_local_analytics_ops.json`, `e2e_local_analytics_ops.log` |
-| 性能（Before 3de9f3c / After、HTTP n=100、pgbench） | **実測済み** | `perf/v030_*`、要約は [docs/PERFORMANCE.md](../docs/PERFORMANCE.md) §4 |
-| token audienceのresource束縛（ローカル実測） | **束縛されない** → DoDでBLOCKED | `perf/resource_audience.json` |
-| Node 24 でのbuild/test | **NOT RUN（local）** | CIのmatrixに追加済み、push未承認 |
-| GitHub Actions（このブランチ） | **NOT RUN** | push未承認 |
-| Vercel runtime smoke / Staging Supabase | **BLOCKED** | env 0件、Fortune Journal用Supabase projectなし（`vercel_audit_2026-10-16.md`） |
-| 実Googleログイン / ChatGPT・Claude実ホスト / 顧客Sheets / Meta Threads / 決済 | **BLOCKED** | Staging公開URL・Google OAuth client・Meta権限・決済事業者が必要 |
+| Staging（Supabase project・Vercel Preview env・Auth Hook有効化・db push） | BLOCKED | Fortune Journal用のSupabase projectが存在しない。作成・設定はオーナー承認が必要（AGENTS.md §2） |
+| 実Googleログイン（binding cookieの実発行）、ChatGPT/Claude実ホスト接続、hosted Supabaseでのhook挙動 | BLOCKED | Staging公開URLとGoogle OAuth clientが必要。ローカルではmagic linkセッション + 同じ鍵で計算したbinding cookieで代替した（callbackでの発行処理自体は単体レベル） |
+| Vercel Firewall rate limit、Deployment Protection解除、通知先（log drain） | BLOCKED | 本番/Preview設定変更は承認が必要 |
+| 顧客Google Sheets、Meta Threads実API、決済 | BLOCKED | 顧客側コネクタの手動E2E、Meta権限、決済事業者が未確定（webhook 501） |
+| プライバシーポリシー・利用規約・問い合わせ窓口 | BLOCKED | 法務文面と実在の連絡先が未確定（仮の文面は作らない） |
+| GitHub Actions | 不使用 | 指示により受入れ基準にしない |
 
-E2Eの範囲（両モード）: Google以外のログイン拒否、anonと署名済みユーザーのData API全拒否（表・RPC・他人のaccess status）、DCR+PKCE（誤verifier・code再利用拒否）、同意画面（client名・callback host・unverified・Origin/セッション必須）、ブラウザセッションJWT・ゴミ・改ざんtokenは401+RFC 9728、tools/list 7件（`_meta.securitySchemes`・outputSchema）、`initialize` と 2026-07-28 envelope、初回計算でTrial開始、同一requestId replay・別入力conflict、日付越えtarot replay、Free 3回/ISO週・Free tarot拒否・Trial終了後の同一tarot replay（消費なし）、本人export（fingerprint・出生日なし）、refresh、revoke後のaccess/refresh失効、deny→`access_denied`、他ユーザーによる承認不可、cron認証とpurge、署名付きops（無署名・改ざん・期限切れ拒否）、同一drawId 10並列→1単位、停止アカウントの拒否、アカウント削除後のtoken失効。ONモードは加えて同意前の接続イベントなし・同意後に応答後1件、analytics/interestの別同意、topic gating、feedback/report（他人のreading拒否）、撤回による任意データ削除。
-
-## このブランチで実行中に見つけて直した不具合
-
-1. export が `resource=__proto__` 等のprototypeキーを受理し503になっていた（`in` 演算子）→ `Object.hasOwn`、unitテスト追加。
-2. `fj_record_calculation` が毎回 `user_access` 行を書き換えていた（`first_calculated_at = coalesce(...)`）→ 未設定時だけ更新。
-3. `src/lib/env.ts` から `node:crypto` を含む秘密読取りがブラウザbundleに入りbuildが失敗した（リファクタ中に発生）→ `src/lib/secrets.ts` に分離。
-
-過去の検証記録（v0.2.1 / PR #1）はGit履歴の `verification/` にある。PR #1 の性能生データ `perf/before_*.json`・`after_*.json`・`auth_probe.json`・`expired_token_after.json` は残している。
+過去の記録（v0.3.0 `fd0d36f` の `results.json`・各ログ・`perf/`）は同ディレクトリに残している（このファイルが現在の正本）。

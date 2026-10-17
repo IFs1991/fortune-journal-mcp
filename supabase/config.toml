@@ -65,6 +65,12 @@ enabled = false
 # Configure Google credentials through local secrets/dashboard before OAuth E2E.
 # This local config deliberately does not enable a fallback password login.
 
+# OAuth-client access tokens get aud=urn:fortune-journal:mcp (supabase/migrations: fj_access_token_hook).
+# /api/mcp refuses tokens without it, so Staging/Production must enable the same hook (docs/OPERATIONS.md).
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/fj_access_token_hook"
+
 [auth.oauth_server]
 # Supabase OAuth 2.1 server for MCP clients (separate from Google login).
 enabled = true

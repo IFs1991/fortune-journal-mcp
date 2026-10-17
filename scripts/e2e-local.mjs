@@ -7,9 +7,11 @@
 import {spawnSync} from 'node:child_process';
 import {createHash, createHmac, randomBytes, randomUUID} from 'node:crypto';
 import {writeFileSync} from 'node:fs';
+import {request as httpRequest} from 'node:http';
 import {createClient} from '@supabase/supabase-js';
 import {createServerClient} from '@supabase/ssr';
-import {signOps} from '../src/domain/security.ts';
+import {signOps, webSessionBinding} from '../src/domain/security.ts';
+import {MCP_TOKEN_AUDIENCE} from '../src/domain/oauth-claims.ts';
 
 const loopback = (u) => ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(u).hostname);
 const status = JSON.parse(
@@ -62,8 +64,19 @@ async function newUser(label) {
   if (ve) throw ve;
   return {id: data.user.id, email, session: v.session};
 }
-/** Real @supabase/ssr cookie encoding, produced by the library itself into an in-memory jar. */
-async function cookieHeader(session) {
+const BINDING_COOKIE = new URL(APP).protocol === 'https:' ? '__Host-fj-web-session' : 'fj-web-session';
+/** The HttpOnly cookie /auth/callback sets after a real Google sign-in (Google cannot run locally). */
+function bindingCookie(session) {
+  if (!process.env.WEB_SESSION_HMAC_KEY)
+    throw new Error('WEB_SESSION_HMAC_KEY not provided to the E2E process; source the same env as the app');
+  const claims = decode(session.access_token);
+  return `${BINDING_COOKIE}=${webSessionBinding(process.env.WEB_SESSION_HMAC_KEY, claims.sub, claims.session_id)}`;
+}
+/**
+ * Real @supabase/ssr cookie encoding, produced by the library itself into an in-memory jar, plus the app's
+ * web-session binding unless `bind` is false (bind may also be another session to model a stolen binding).
+ */
+async function cookieHeader(session, bind = true) {
   const jar = new Map();
   const ssr = createServerClient(API, PUB, {
     cookies: {
@@ -76,7 +89,9 @@ async function cookieHeader(session) {
     refresh_token: session.refresh_token,
   });
   if (error) throw error;
-  return [...jar].map(([n, v]) => `${n}=${v}`).join('; ');
+  const cookies = [...jar].map(([n, v]) => `${n}=${v}`);
+  if (bind) cookies.push(bindingCookie(bind === true ? session : bind));
+  return cookies.join('; ');
 }
 const userClient = (s) =>
   createClient(API, PUB, {
@@ -84,7 +99,7 @@ const userClient = (s) =>
     auth: {persistSession: false, autoRefreshToken: false},
   });
 
-async function mcp(token, method, params = {}) {
+async function mcp(token, method, params = {}, extraHeaders = {}) {
   const res = await fetch(`${APP}/api/mcp`, {
     method: 'POST',
     headers: {
@@ -92,6 +107,7 @@ async function mcp(token, method, params = {}) {
       accept: 'application/json, text/event-stream',
       'mcp-protocol-version': '2025-06-18',
       ...(token ? {authorization: `Bearer ${token}`} : {}),
+      ...extraHeaders,
     },
     body: JSON.stringify({jsonrpc: '2.0', id: randomUUID(), method, params}),
   });
@@ -344,6 +360,58 @@ try {
       claims.client_id === accessA.clientId && claims.sub === A.id && claims.iss === `${API}/auth/v1`,
       'access token not bound to client/user/issuer',
     );
+    // Custom Access Token Hook: OAuth-client tokens are issued for this MCP resource only.
+    ok(claims.aud === MCP_TOKEN_AUDIENCE, `OAuth token aud=${JSON.stringify(claims.aud)}`);
+    ok(
+      JSON.stringify([decode(A.session.access_token).aud].flat()) === '["authenticated"]',
+      'browser session token got the MCP audience',
+    );
+  });
+
+  await step('MCP: Origin and Host are checked before the bearer (403 / 421), body is bounded', async () => {
+    const good = await mcp(accessA.access_token, 'tools/list', {}, {origin: APP});
+    ok(good.status === 200, `same-origin MCP call ${good.status}`);
+    for (const origin of ['https://evil.example', 'null', 'http://localhost:9999']) {
+      const r = await mcp(accessA.access_token, 'tools/list', {}, {origin});
+      ok(r.status === 403, `valid bearer with Origin ${origin} got ${r.status}`);
+    }
+    const noAuth = await mcp(null, 'tools/list', {}, {origin: 'https://evil.example'});
+    ok(noAuth.status === 403, `foreign Origin without bearer got ${noAuth.status}`);
+    // fetch() drops a custom Host header, so this one goes through node:http (loopback app only).
+    const rebound = await new Promise((resolve, reject) => {
+      const target = new URL('/api/mcp', APP);
+      const req = httpRequest(
+        {
+          hostname: target.hostname,
+          port: target.port,
+          path: target.pathname,
+          method: 'POST',
+          headers: {
+            host: 'evil.example',
+            authorization: `Bearer ${accessA.access_token}`,
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+          },
+        },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode);
+        },
+      );
+      req.on('error', reject);
+      req.end(JSON.stringify({jsonrpc: '2.0', id: 1, method: 'tools/list'}));
+    });
+    ok(rebound === 421, `foreign Host (DNS rebinding) got ${rebound}`);
+    const big = await fetch(`${APP}/api/mcp`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${accessA.access_token}`,
+      },
+      body: JSON.stringify({jsonrpc: '2.0', id: 1, method: 'tools/list', params: {pad: 'x'.repeat(70_000)}}),
+    });
+    ok(big.status === 413, `oversized MCP body got ${big.status}`);
   });
 
   await step('MCP: browser session JWT (no client_id) and garbage are 401 with discovery', async () => {
@@ -826,6 +894,94 @@ try {
     ok((await a.rpc('fj_access_status', {p_user_id: B.id})).error, 'A read B access status');
   });
 
+  await step(
+    'Web/MCP boundary: an MCP OAuth token (forged cookie, bearer, stolen binding) cannot use account APIs',
+    async () => {
+      const E = await newUser('e');
+      created.push(E.id);
+      const conn = await connect(E, 'FJ E2E Boundary');
+      const oauthSession = {access_token: conn.access_token, refresh_token: conn.refresh_token};
+      const forged = await cookieHeader(oauthSession, false);
+      const forgedBound = await cookieHeader(oauthSession, oauthSession); // binding for the OAuth session id
+      const realUnbound = await cookieHeader(E.session, false);
+      const realOtherBinding = await cookieHeader(E.session, B.session);
+      const form = {origin: APP, 'content-type': 'application/x-www-form-urlencoded'};
+      const exportAs = (headers) =>
+        fetch(`${APP}/api/account/export?resource=access`, {headers, redirect: 'manual'});
+      for (const [label, headers] of [
+        ['forged cookie', {cookie: forged}],
+        ['forged cookie + binding', {cookie: forgedBound}],
+        ['bearer only', {authorization: `Bearer ${conn.access_token}`}],
+        ['real cookie without binding', {cookie: realUnbound}],
+        ["real cookie + another user's binding", {cookie: realOtherBinding}],
+      ]) {
+        const r = await exportAs(headers);
+        ok(r.status === 401, `export with ${label}: ${r.status}`);
+      }
+      for (const cookie of [forged, forgedBound]) {
+        const prefs = await fetch(`${APP}/api/account/preferences`, {
+          method: 'POST',
+          redirect: 'manual',
+          headers: {...form, cookie},
+          body: new URLSearchParams({analytics: 'no'}),
+        });
+        ok(prefs.status === 401, `preferences with OAuth token: ${prefs.status}`);
+        const revoke = await fetch(`${APP}/api/oauth/revoke`, {
+          method: 'POST',
+          redirect: 'manual',
+          headers: {...form, cookie},
+          body: new URLSearchParams({client_id: conn.clientId}),
+        });
+        ok(revoke.status === 401, `revoke with OAuth token: ${revoke.status}`);
+        const del = await fetch(`${APP}/api/account/delete`, {
+          method: 'POST',
+          redirect: 'manual',
+          headers: {...form, cookie},
+          body: new URLSearchParams({confirmation: 'DELETE_MY_ACCOUNT'}),
+        });
+        ok(del.status === 401, `delete with OAuth token: ${del.status}`);
+        const page = await (await fetch(`${APP}/login`, {headers: {cookie}})).text();
+        ok(
+          !page.includes('Signed in with Google') && !page.includes(E.email),
+          'login page trusted the OAuth token',
+        );
+      }
+      const {data: still} = await admin.auth.admin.getUserById(E.id);
+      ok(still?.user?.id === E.id, 'user was deleted through an OAuth token');
+      ok((await mcp(conn.access_token, 'tools/list')).status === 200, 'connection broken by the attempts');
+
+      // CSRF: the real, bound session is still refused for cross-site or non-form requests.
+      const real = await cookieHeader(E.session);
+      ok((await exportAs({cookie: real})).status === 200, 'own bound browser session cannot export');
+      ok(
+        (await exportAs({cookie: real, 'sec-fetch-site': 'cross-site'})).status === 403,
+        'cross-site export allowed',
+      );
+      const json = await fetch(`${APP}/api/account/delete`, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {cookie: real, origin: APP, 'content-type': 'text/plain'},
+        body: 'confirmation=DELETE_MY_ACCOUNT',
+      });
+      ok(json.status === 403, `text/plain deletion ${json.status}`);
+      const sameSite = await fetch(`${APP}/api/account/delete`, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {...form, cookie: real, 'sec-fetch-site': 'same-site'},
+        body: new URLSearchParams({confirmation: 'DELETE_MY_ACCOUNT'}),
+      });
+      ok(sameSite.status === 403, `same-site (sibling subdomain) deletion ${sameSite.status}`);
+      // The user id always comes from the verified session, never from input.
+      const other = await (
+        await fetch(`${APP}/api/account/export?resource=access&user_id=${A.id}`, {headers: {cookie: real}})
+      ).json();
+      ok(
+        other.rows.every((row) => row.user_id === E.id),
+        "export returned another user's rows",
+      );
+    },
+  );
+
   await step('Export: own data only, paged, no fingerprint; requires a session', async () => {
     ok((await fetch(`${APP}/api/account/export?resource=readings`)).status === 401, 'export without session');
     const cookieA = await cookieHeader(A.session);
@@ -859,6 +1015,7 @@ try {
       client_id: accessA.clientId,
     });
     ok(r.status === 200 && r.body.access_token, `refresh ${r.status}`);
+    ok(decode(r.body.access_token).aud === MCP_TOKEN_AUDIENCE, 'refreshed token lost the MCP audience');
     ok((await mcp(r.body.access_token, 'tools/list')).status === 200, 'refreshed token rejected');
     accessA = {...accessA, ...r.body};
   });
@@ -937,7 +1094,7 @@ try {
   );
 
   await step(
-    'Cron: bearer CRON_SECRET required; maintenance purges via the app (Threads insights off)',
+    'Cron: bearer CRON_SECRET required; maintenance purges via the app; exhausted retries answer 500',
     async () => {
       ok((await fetch(`${APP}/api/cron/maintenance`)).status === 401, 'cron without secret');
       ok(
@@ -955,9 +1112,52 @@ try {
       });
       const body = await r.json();
       ok(
-        r.status === 200 && body.insights === 'disabled' && body.results.every((x) => x.purged !== false),
+        r.status === 200 &&
+          body.ok === true &&
+          body.insights === 'disabled' &&
+          body.results[0]?.step === 'purge',
         `maintenance ${r.status} ${JSON.stringify(body).slice(0, 120)}`,
       );
+      // Today's purge out of attempts: the cron invocation fails (500) instead of reporting OK.
+      const key = `purge:${new Date().toISOString().slice(0, 10)}`;
+      const {data: run} = await admin
+        .from('automation_runs')
+        .select('id,status,attempts,error_code,finished_at')
+        .eq('task', 'purge')
+        .eq('idempotency_key', key)
+        .single();
+      ok(run, 'purge run not recorded');
+      await admin
+        .from('automation_runs')
+        .update({
+          status: 'failed',
+          attempts: 3,
+          error_code: 'PURGE_FAILED',
+          finished_at: new Date().toISOString(),
+        })
+        .eq('id', run.id);
+      try {
+        const failed = await fetch(`${APP}/api/cron/maintenance`, {
+          headers: {authorization: `Bearer ${process.env.CRON_SECRET}`},
+        });
+        const out = await failed.json();
+        ok(
+          failed.status === 500 &&
+            out.ok === false &&
+            out.results[0]?.errorCode === 'PURGE_RETRIES_EXHAUSTED',
+          `exhausted purge reported ${failed.status} ${JSON.stringify(out).slice(0, 160)}`,
+        );
+      } finally {
+        await admin
+          .from('automation_runs')
+          .update({
+            status: run.status,
+            attempts: run.attempts,
+            error_code: run.error_code,
+            finished_at: run.finished_at,
+          })
+          .eq('id', run.id);
+      }
     },
   );
 

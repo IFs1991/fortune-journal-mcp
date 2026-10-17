@@ -1,3 +1,29 @@
+# v0.3.1 — Release hardening (2026-10-17)
+
+Security and integrity fixes found before the first public deployment. Every fix has a regression test that failed (or showed the bad behaviour) on v0.3.0; evidence in [verification/RESULTS.md](../verification/RESULTS.md).
+
+## Security (P0)
+
+- **Web/MCP boundary**: an MCP OAuth token placed into a Supabase cookie could call export, preferences, revoke and account deletion. Account pages and APIs now require a Supabase-verified browser-session token (no `client_id`, `aud=authenticated` only, live `session_id`) plus an HttpOnly binding cookie issued only by `/auth/callback` (`WEB_SESSION_HMAC_KEY`, new). Cookie POSTs require exact Origin, same-origin fetch metadata and a form body; export refuses cross-site requests.
+- **Token audience**: Custom Access Token Hook `fj_access_token_hook` sets `aud=urn:fortune-journal:mcp` on OAuth-client tokens; `/api/mcp` requires exactly that audience. Must be enabled in Supabase Auth for Staging/Production.
+- **Open redirect**: `safeNextPath` let `/\t/evil.example` through (browsers drop TAB). It now rebuilds only the consent path.
+- **MCP Origin/Host**: foreign `Origin` → 403 before authentication, foreign `Host` → 421, body capped at 64 KiB. `MCP_ALLOWED_ORIGINS` (new, empty by default).
+- **Rate limits**: per-instance limits with 429 for `/api/mcp` (address and bearer) and browser routes.
+
+## Billing / DB (P1)
+
+- A second notice of the same charge no longer drops the newer subscription state; equal-time snapshots compare plan, price, cancellation, interval and currency (`needs_reconciliation`, fail closed on entitlement disagreement, `reconciled` snapshots resolve); subscription bindings survive account deletion de-identified so refunds and chargebacks are recorded. `fj_revenue_report.eventsNeedingReconciliation`. Webhook stays 501; no checkout.
+
+## Operations (P1)
+
+- Maintenance reports exhausted/failed steps as failures (`retryable` vs permanent); cron answers 500 on any failure.
+- Threads publishing: outcomes `success` / `failed` (before the publish call, retryable on request) / `unknown` (never re-posted); `recorded` flag; `resolve_publish` operator command and `fj_resolve_publish`; unknown posts listed in the report.
+- `fj_access_token_hook` volatility STABLE (db lint).
+
+## Tooling
+
+- `npm run verify:local` (one command, no GitHub Actions), `npm run test:ops:local`, `scripts/check-env.mjs`, `scripts/smoke-remote.mjs`; `.mcp.json` declares `type: "http"`.
+
 # v0.3.0 — Pre-release baseline (2026-10-16)
 
 Record with before/after numbers: [verification/refactor_2026-10-16.md](../verification/refactor_2026-10-16.md).

@@ -1,0 +1,9 @@
+PASS health version 0.3.0
+PASS protected resource metadata (RFC 9728) 
+PASS MCP without a token: 401 + resource_metadata challenge 
+PASS MCP with a foreign Origin: 403 before authentication 
+PASS MCP with a garbage bearer: 401 
+PASS billing webhook stays 501 
+PASS authorization server metadata (path-appended only; DCR enabled)
+PASS .mcp.json points at this origin over HTTP transport 
+8 passed / 0 failed

@@ -1,0 +1,5 @@
+BEFORE safeNextPath "/\t/evil.example" -> "/\t/evil.example" resolves to https://evil.example
+BEFORE safeNextPath "/\n/evil.example" -> "/login" resolves to https://app.example
+BEFORE safeNextPath "/%5Cevil.example" -> "/%5Cevil.example" resolves to https://app.example
+BEFORE safeNextPath "/%252F%252Fevil.example" -> "/%252F%252Fevil.example" resolves to https://app.example
+BEFORE precheck accepts aud=authenticated (any project token with client_id): true

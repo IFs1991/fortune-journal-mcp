@@ -67,7 +67,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.fortune_posts WHERE id = post) THEN RAISE EXCEPTION 'published post purged'; END IF;
 END $$;
 
--- Account deletion cascades every per-user row (the money ledger is covered in billing.sql).
+-- Account deletion removes every per-user row; subscription bindings and the money ledger stay de-identified (billing.sql).
 RESET ROLE;
 DELETE FROM auth.users WHERE id = 'f1000000-0000-4000-8000-000000000001';
 DO $$

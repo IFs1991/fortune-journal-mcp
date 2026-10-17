@@ -55,7 +55,7 @@ flowchart LR
 
 ## 顧客MCPツール（7個）
 
-全ツール: OAuth bearer必須 → `verifyOAuthBearer`（未検証claimで明らかな不正を先に拒否 → `auth.getUser()` → claim照合）→ 検証済みuser idだけをハンドラへ。
+全ツール: Origin/Host検証（不正Origin 403、不正Host 421）→ レート制限（429）→ 本文64KiB → OAuth bearer必須 → `verifyOAuthBearer`（未検証claimで明らかな不正を先に拒否: `aud = urn:fortune-journal:mcp`・issuer・client_id・exp → `auth.getUser()` → claim照合）→ 検証済みuser idだけをハンドラへ。
 
 | ツール | 処理 | 往復（Auth + DB） | 主なエラー |
 |---|---|---|---|
@@ -67,23 +67,25 @@ flowchart LR
 | `submit_reading_feedback` | `fj_submit_feedback`（計測OFFならDBなし） | 1 + 0/1 | OPTIONAL_ANALYTICS_DISABLED, FEEDBACK_NOT_ACCEPTED |
 | `report_journal_action` | `fj_record_funnel`（同上） | 1 + 0/1 | OPTIONAL_ANALYTICS_DISABLED, REPORT_NOT_ACCEPTED |
 
-期限切れ・他issuer・client_idなしのtokenは Auth 0回で401（RFC 9728 `resource_metadata` 付き）。実測は [PERFORMANCE.md](PERFORMANCE.md)。
+期限切れ・他issuer・client_idなし・MCP audienceでないtokenは Auth 0回で401（RFC 9728 `resource_metadata` 付き）。MCP audienceはSupabase Custom Access Token Hook（`fj_access_token_hook`）がOAuth clientのtokenにだけ付ける。実測は [PERFORMANCE.md](PERFORMANCE.md)。
 
 ## Webと運営の経路
 
 | 経路 | 認証 | 処理 |
 |---|---|---|
-| `/login`, `/oauth/consent` | Supabaseセッションcookie | Googleログイン、接続同意（client名・callback host・未検証client警告）、設定・接続解除・エクスポート・削除の画面 |
-| `/api/oauth/decision`, `/api/oauth/revoke`, `/api/account/*`, `/auth/signout` | 同一Origin POST + セッション | 同意/拒否、接続解除、`src/account.ts` |
+| `/auth/callback` | Google→SupabaseのPKCE code | セッション確立 + Webセッションbinding cookie発行（`src/lib/web-session.ts`） |
+| `/login`, `/oauth/consent` | `webSession()`: Supabaseが検証したブラウザセッション型token + binding cookie（MCP OAuth tokenは未ログイン扱い） | Googleログイン、接続同意（client名・callback host・未検証client警告）、設定・接続解除・エクスポート・削除の画面 |
+| `/api/oauth/decision`, `/api/oauth/revoke`, `/api/account/*` | 同一Origin・same-origin fetch metadata・form本文のPOST（exportはGET + cross-site拒否）+ `webSession()` + レート制限 | 同意/拒否、接続解除、`src/account.ts` |
+| `/auth/signout` | 同一Origin POST | サインアウトとbinding cookie削除 |
 | `/.well-known/oauth-protected-resource[/api/mcp]` | 公開 | RFC 9728 PRM（`resource` = `APP_ORIGIN/api/mcp`） |
 | `/api/ops` | HMAC（±300秒、64KiB、query禁止） | `src/ops/commands.ts` のallowlist |
-| `/api/cron/maintenance` | `Bearer CRON_SECRET` | 日次purge、24/72/168h snapshot（最大3件）、日次account snapshot。公開はしない |
+| `/api/cron/maintenance` | `Bearer CRON_SECRET` | 日次purge、24/72/168h snapshot（最大3件）、日次account snapshot。公開はしない。1件でも失敗（試行切れを含む）なら500 |
 | `/api/billing/webhook` | — | 常に501 |
 | `/api/health` | 公開 | バージョンのみ |
 
 ## 冪等性の要点
 
 - 計算: user + requestId/drawId + HMAC fingerprint。台帳1行 = 利用1回。同一入力の再試行はreplay（Trial終了後も）、別入力はconflict。
-- 運営: `automation_runs(task, idempotency_key)` のlease。公開は1回だけclaimでき、不明なら `publish_unknown`。
-- 課金: provider + event id、さらに economic key。subscription snapshotは `provider_updated_at` で順序付け。
+- 運営: `automation_runs(task, idempotency_key)` のlease（試行切れは `exhausted` として失敗扱い）。公開は1回だけclaimでき、未公開確定なら `failed`（明示指示で再試行可）、不明なら `publish_unknown`（`fj_resolve_publish` で人が確定）。
+- 課金: provider + event id、さらに economic key（同じ入金の別通知はcashを数えずsnapshotだけ適用）。subscription snapshotは `provider_updated_at` で順序付け、同時刻の内容差は `needs_reconciliation`。
 - 収集: run id + 対象粒度で一意。run（90日）より snapshot（400日）が長く残るので run_id は外部キーにしない。

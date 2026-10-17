@@ -52,6 +52,16 @@ export function verifyOps(
     return false;
   }
 }
+/**
+ * Proof that a Supabase session was created by this app's own Google sign-in callback (/auth/callback), stored
+ * in an HttpOnly cookie. An OAuth client holding the user's MCP tokens can rebuild a Supabase cookie but cannot
+ * mint this value, so it cannot reach the account APIs. Session ids survive token refresh; a new sign-in rebinds.
+ */
+export function webSessionBinding(secret: string, userId: string, sessionId: string): string {
+  return createHmac('sha256', requireSecret(secret))
+    .update(`fj-web-session-v1\n${userId}\n${sessionId}`)
+    .digest('hex');
+}
 export function issueReferral(
   secret: string,
   postId: string,

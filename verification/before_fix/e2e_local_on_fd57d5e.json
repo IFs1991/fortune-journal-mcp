@@ -1,0 +1,101 @@
+{
+  "ranAt": "2026-10-17T08:41:50.433Z",
+  "analyticsMode": false,
+  "operationsMode": false,
+  "target": {
+    "supabase": "local CLI stack (loopback)",
+    "app": "http://localhost:3000"
+  },
+  "passed": 17,
+  "failed": 4,
+  "results": [
+    {
+      "name": "Google-only: email signup, password and OTP sign-in are refused",
+      "result": "PASS"
+    },
+    {
+      "name": "Data API: anon key reads nothing and calls no RPC",
+      "result": "PASS"
+    },
+    {
+      "name": "OAuth: DCR client + PKCE + consent page shows client and callback",
+      "result": "FAIL",
+      "error": "OAuth token aud=\"authenticated\""
+    },
+    {
+      "name": "MCP: Origin and Host are checked before the bearer (403 / 421), body is bounded",
+      "result": "FAIL",
+      "error": "valid bearer with Origin https://evil.example got 200"
+    },
+    {
+      "name": "MCP: browser session JWT (no client_id) and garbage are 401 with discovery",
+      "result": "PASS"
+    },
+    {
+      "name": "MCP: expired and tampered OAuth tokens are 401 (local claim pre-check never authenticates on its own)",
+      "result": "PASS"
+    },
+    {
+      "name": "MCP: tools/list exposes exactly the 7 customer tools with OAuth security metadata",
+      "result": "PASS"
+    },
+    {
+      "name": "Trial starts at first calculation (not at sign-in/consent); retry is idempotent; conflict rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "Tarot retry on a later day replays the original draw instead of charging again",
+      "result": "PASS"
+    },
+    {
+      "name": "Free tier after trial: tarot denied, numerology 3/ISO-week then USAGE_LIMIT_REACHED",
+      "result": "PASS"
+    },
+    {
+      "name": "Optional analytics tools refuse when globally disabled; schema tool never claims a Google save",
+      "result": "PASS"
+    },
+    {
+      "name": "Data API: signed-in users can read or change nothing directly (app-only access)",
+      "result": "PASS"
+    },
+    {
+      "name": "Web/MCP boundary: an MCP OAuth token (forged cookie, bearer, stolen binding) cannot use account APIs",
+      "result": "FAIL",
+      "error": "export with forged cookie: 200"
+    },
+    {
+      "name": "Export: own data only, paged, no fingerprint; requires a session",
+      "result": "PASS"
+    },
+    {
+      "name": "OAuth: refresh token rotates and yields a working access token",
+      "result": "FAIL",
+      "error": "refreshed token lost the MCP audience"
+    },
+    {
+      "name": "OAuth: user revokes the connection in the app; access and refresh tokens stop working",
+      "result": "PASS"
+    },
+    {
+      "name": "OAuth: deny returns access_denied to the client; another user cannot act on A's request",
+      "result": "PASS"
+    },
+    {
+      "name": "Cron: bearer CRON_SECRET required; maintenance purges via the app (Threads insights off)",
+      "result": "PASS"
+    },
+    {
+      "name": "Ops API: separate HMAC, disabled by default; signed report works only when enabled",
+      "result": "PASS"
+    },
+    {
+      "name": "Concurrency and suspension: 10 parallel identical draws charge once; suspended account is refused everywhere",
+      "result": "PASS"
+    },
+    {
+      "name": "Account deletion: confirmation + Origin required; afterwards OAuth tokens are rejected",
+      "result": "PASS"
+    }
+  ]
+}

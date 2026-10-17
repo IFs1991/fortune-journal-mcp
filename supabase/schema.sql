@@ -70,6 +70,31 @@ COMMENT ON FUNCTION public.fj_access_status(p_user_id uuid) IS 'The only tier ru
 
 
 --
+-- Name: fj_access_token_hook(jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fj_access_token_hook(event jsonb) RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_claims jsonb := event->'claims';
+BEGIN
+  IF jsonb_typeof(v_claims->'client_id') = 'string' AND v_claims->>'client_id' <> '' THEN
+    v_claims := jsonb_set(v_claims, '{aud}', '"urn:fortune-journal:mcp"'::jsonb);
+  END IF;
+  RETURN jsonb_build_object('claims', v_claims);
+END $$;
+
+
+--
+-- Name: FUNCTION fj_access_token_hook(event jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fj_access_token_hook(event jsonb) IS 'Supabase Auth hook: OAuth-client tokens get aud=urn:fortune-journal:mcp.';
+
+
+--
 -- Name: fj_apply_billing(text, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -85,11 +110,14 @@ DECLARE
   v_currency text := p_event->>'currency';
   v_exponent smallint := (p_event->>'currency_exponent')::smallint;
   v_snapshot jsonb := nullif(p_event->'subscription', 'null'::jsonb);
+  v_reconciled boolean := coalesce((p_event->>'reconciled')::boolean, false);
   v_snapshot_at timestamptz;
   v_is_cash boolean;
+  v_cash_duplicate boolean := false;
   v_disposition text := 'none';
   v_subscription public.subscriptions%ROWTYPE;
   v_previous public.billing_events%ROWTYPE;
+  v_new public.subscriptions%ROWTYPE;
 BEGIN
   IF p_provider IS NULL OR p_provider !~ '^[a-z][a-z0-9_]{1,30}$'
      OR p_event_id IS NULL OR char_length(p_event_id) NOT BETWEEN 1 AND 200
@@ -113,17 +141,28 @@ BEGIN
     RAISE EXCEPTION 'NON_FINANCIAL_AMOUNT';
   END IF;
 
-  -- Duplicate delivery (same event id) or another notification of the same money movement.
-  SELECT * INTO v_previous FROM public.billing_events
-  WHERE provider = p_provider AND (event_id = p_event_id OR economic_key = v_economic_key)
-  LIMIT 1;
+  -- Redelivery of the same event: it was fully processed the first time.
+  SELECT * INTO v_previous FROM public.billing_events WHERE provider = p_provider AND event_id = p_event_id;
   IF FOUND THEN
-    IF v_previous.event_type IS DISTINCT FROM v_kind OR v_previous.amount_minor IS DISTINCT FROM v_amount
-       OR v_previous.currency IS DISTINCT FROM v_currency OR v_previous.currency_exponent IS DISTINCT FROM v_exponent
+    IF v_previous.event_type IS DISTINCT FROM v_kind OR v_previous.economic_key IS DISTINCT FROM v_economic_key
+       OR v_previous.amount_minor IS DISTINCT FROM v_amount OR v_previous.currency IS DISTINCT FROM v_currency
+       OR v_previous.currency_exponent IS DISTINCT FROM v_exponent
        OR v_previous.provider_subscription_id IS DISTINCT FROM v_subscription.provider_subscription_id THEN
       RAISE EXCEPTION 'BILLING_IDEMPOTENCY_CONFLICT';
     END IF;
     RETURN jsonb_build_object('duplicate', true, 'stateApplied', false);
+  END IF;
+  -- Another notification of an already recorded money movement: same facts required, cash not counted again.
+  IF v_is_cash THEN
+    SELECT * INTO v_previous FROM public.billing_events WHERE provider = p_provider AND economic_key = v_economic_key;
+    IF FOUND THEN
+      IF v_previous.event_type IS DISTINCT FROM v_kind OR v_previous.amount_minor IS DISTINCT FROM v_amount
+         OR v_previous.currency IS DISTINCT FROM v_currency OR v_previous.currency_exponent IS DISTINCT FROM v_exponent
+         OR v_previous.provider_subscription_id IS DISTINCT FROM v_subscription.provider_subscription_id THEN
+        RAISE EXCEPTION 'BILLING_IDEMPOTENCY_CONFLICT';
+      END IF;
+      v_cash_duplicate := true;
+    END IF;
   END IF;
 
   IF v_snapshot IS NOT NULL THEN
@@ -132,30 +171,50 @@ BEGIN
        OR v_snapshot->>'status' NOT IN ('incomplete', 'trialing', 'active', 'past_due', 'canceled', 'unpaid', 'expired') THEN
       RAISE EXCEPTION 'INVALID_SUBSCRIPTION_SNAPSHOT';
     END IF;
-    IF v_subscription.provider_updated_at IS NULL OR v_snapshot_at > v_subscription.provider_updated_at THEN
+    v_new := v_subscription;
+    v_new.status := v_snapshot->>'status';
+    v_new.current_period_end := (v_snapshot->>'current_period_end')::timestamptz;
+    v_new.cancel_at_period_end := coalesce((v_snapshot->>'cancel_at_period_end')::boolean, false);
+    v_new.plan_key := v_snapshot->>'plan_key';
+    v_new.amount_minor := (v_snapshot->>'amount_minor')::bigint;
+    v_new.currency := v_snapshot->>'currency';
+    v_new.currency_exponent := (v_snapshot->>'currency_exponent')::smallint;
+    v_new.interval_months := (v_snapshot->>'interval_months')::smallint;
+
+    IF v_subscription.provider_updated_at IS NULL OR v_snapshot_at > v_subscription.provider_updated_at
+       OR (v_reconciled AND v_snapshot_at >= v_subscription.provider_updated_at) THEN
       UPDATE public.subscriptions SET
-        status = v_snapshot->>'status',
-        current_period_end = (v_snapshot->>'current_period_end')::timestamptz,
-        cancel_at_period_end = coalesce((v_snapshot->>'cancel_at_period_end')::boolean, false),
-        verified_at = now(),
-        provider_updated_at = v_snapshot_at,
-        plan_key = v_snapshot->>'plan_key',
-        amount_minor = (v_snapshot->>'amount_minor')::bigint,
-        currency = v_snapshot->>'currency',
-        currency_exponent = (v_snapshot->>'currency_exponent')::smallint,
-        interval_months = (v_snapshot->>'interval_months')::smallint,
-        updated_at = now()
+        status = v_new.status, current_period_end = v_new.current_period_end,
+        cancel_at_period_end = v_new.cancel_at_period_end, verified_at = now(), provider_updated_at = v_snapshot_at,
+        plan_key = v_new.plan_key, amount_minor = v_new.amount_minor, currency = v_new.currency,
+        currency_exponent = v_new.currency_exponent, interval_months = v_new.interval_months, updated_at = now()
       WHERE id = v_subscription.id;
       v_disposition := 'applied';
     ELSIF v_snapshot_at = v_subscription.provider_updated_at
-       AND (v_snapshot->>'status' IS DISTINCT FROM v_subscription.status
-         OR (v_snapshot->>'current_period_end')::timestamptz IS DISTINCT FROM v_subscription.current_period_end) THEN
+       AND (v_new.status, v_new.current_period_end, v_new.cancel_at_period_end, v_new.plan_key, v_new.amount_minor,
+            v_new.currency, v_new.currency_exponent, v_new.interval_months)
+           IS DISTINCT FROM
+           (v_subscription.status, v_subscription.current_period_end, v_subscription.cancel_at_period_end,
+            v_subscription.plan_key, v_subscription.amount_minor, v_subscription.currency,
+            v_subscription.currency_exponent, v_subscription.interval_months) THEN
+      -- The provider gave two different states for the same instant; which is newer is unknowable here.
       v_disposition := 'needs_reconciliation';
+      IF (v_new.status IN ('active', 'trialing') AND coalesce(v_new.current_period_end > now(), false))
+         IS DISTINCT FROM
+         (v_subscription.status IN ('active', 'trialing') AND coalesce(v_subscription.current_period_end > now(), false)) THEN
+        UPDATE public.subscriptions SET verified_at = NULL, updated_at = now() WHERE id = v_subscription.id;
+      END IF;
     ELSE
       v_disposition := 'older_or_identical';
     END IF;
+    IF v_subscription.user_id IS NULL AND v_new.status IN ('incomplete', 'trialing', 'active', 'past_due', 'unpaid') THEN
+      v_disposition := 'needs_reconciliation';
+    END IF;
   END IF;
 
+  IF v_cash_duplicate THEN
+    RETURN jsonb_build_object('duplicate', true, 'stateApplied', v_disposition = 'applied', 'stateDisposition', v_disposition);
+  END IF;
   INSERT INTO public.billing_events (
     provider, event_id, user_id, provider_subscription_id, event_type, occurred_at, economic_key, original_payment_key,
     amount_minor, currency, currency_exponent, billing_reason, plan_key, state_disposition
@@ -172,7 +231,7 @@ END $_$;
 -- Name: FUNCTION fj_apply_billing(p_provider text, p_event_id text, p_event jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fj_apply_billing(p_provider text, p_event_id text, p_event jsonb) IS 'Billing adapter (not connected): idempotent verified event + ordered subscription snapshot.';
+COMMENT ON FUNCTION public.fj_apply_billing(p_provider text, p_event_id text, p_event jsonb) IS 'Billing adapter (not connected): idempotent verified event, cash counted once, ordered/reconciled subscription snapshot.';
 
 
 --
@@ -226,15 +285,18 @@ BEGIN
     UPDATE public.fortune_posts SET status = 'publish_unknown' WHERE id = p_post_id AND status = 'publishing';
     RETURN jsonb_build_object('acquired', false, 'runId', v_run.id, 'status', 'unknown');
   END IF;
-  IF p_task <> 'publish_post' AND v_run.attempts < 3
-     AND (v_run.status = 'failed' OR (v_run.status = 'running' AND v_run.lease_expires_at <= now())) THEN
+  IF v_run.attempts < 3 AND (v_run.status = 'failed'
+       OR (p_task <> 'publish_post' AND v_run.status = 'running' AND v_run.lease_expires_at <= now())) THEN
     UPDATE public.automation_runs SET status = 'running', attempts = attempts + 1, started_at = now(), finished_at = NULL,
       lease_expires_at = now() + interval '2 minutes', error_code = NULL
     WHERE id = v_run.id
     RETURNING * INTO v_run;
     RETURN jsonb_build_object('acquired', true, 'runId', v_run.id, 'attempt', v_run.attempts);
   END IF;
-  RETURN jsonb_build_object('acquired', false, 'runId', v_run.id, 'status', v_run.status);
+  RETURN jsonb_build_object('acquired', false, 'runId', v_run.id, 'status', v_run.status, 'attempts', v_run.attempts,
+    'errorCode', v_run.error_code,
+    'exhausted', v_run.attempts >= 3 AND (v_run.status = 'failed'
+      OR (v_run.status = 'running' AND v_run.lease_expires_at <= now())));
 END $$;
 
 
@@ -242,7 +304,7 @@ END $$;
 -- Name: FUNCTION fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid) IS 'Ops: acquire an idempotent run lease (publish is never retried).';
+COMMENT ON FUNCTION public.fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid) IS 'Ops: acquire an idempotent run lease (publish never retried automatically; exhausted keys reported).';
 
 
 --
@@ -346,31 +408,56 @@ COMMENT ON FUNCTION public.fj_cohort_report(p_from timestamp with time zone, p_u
 
 
 --
--- Name: fj_finish_publish(uuid, uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+-- Name: fj_deidentify_subscription(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text DEFAULT NULL::text) RETURNS boolean
+CREATE FUNCTION public.fj_deidentify_subscription() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NEW.user_id IS NULL THEN
+    NEW.provider_customer_id := NULL;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: FUNCTION fj_deidentify_subscription(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fj_deidentify_subscription() IS 'Trigger: a subscription binding of a deleted account drops the provider customer id.';
+
+
+--
+-- Name: fj_finish_publish(uuid, uuid, text, text, text, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text DEFAULT NULL::text, p_not_published boolean DEFAULT false) RETURNS boolean
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
 DECLARE
   v_run public.automation_runs%ROWTYPE;
+  v_not_published boolean := coalesce(p_not_published, false) AND p_external_id IS NULL;
 BEGIN
   PERFORM 1 FROM public.fortune_posts WHERE id = p_post_id FOR UPDATE;
   SELECT * INTO v_run FROM public.automation_runs
   WHERE id = p_run_id AND post_id = p_post_id AND task = 'publish_post'
   FOR UPDATE;
-  IF NOT FOUND OR v_run.status NOT IN ('running', 'unknown') THEN
+  -- A definite "not published" may only end the attempt still in flight; an unknown run stays unknown.
+  IF NOT FOUND OR v_run.status NOT IN ('running', 'unknown') OR (v_not_published AND v_run.status <> 'running') THEN
     RETURN false;
   END IF;
   UPDATE public.fortune_posts SET
-    status = CASE WHEN p_external_id IS NULL THEN 'publish_unknown' ELSE 'published' END,
+    status = CASE WHEN p_external_id IS NOT NULL THEN 'published' WHEN v_not_published THEN 'approved' ELSE 'publish_unknown' END,
     external_post_id = p_external_id,
     container_id = coalesce(p_container_id, container_id),
     published_at = CASE WHEN p_external_id IS NULL THEN NULL ELSE now() END
   WHERE id = p_post_id;
   UPDATE public.automation_runs SET
-    status = CASE WHEN p_external_id IS NULL THEN 'unknown' ELSE 'succeeded' END,
+    status = CASE WHEN p_external_id IS NOT NULL THEN 'succeeded' WHEN v_not_published THEN 'failed' ELSE 'unknown' END,
     finished_at = now(),
     duration_ms = greatest(0, extract(epoch FROM (now() - started_at)) * 1000)::bigint,
     error_code = p_error
@@ -380,10 +467,10 @@ END $$;
 
 
 --
--- Name: FUNCTION fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text); Type: COMMENT; Schema: public; Owner: -
+-- Name: FUNCTION fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text, p_not_published boolean); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text) IS 'Ops: record published or unknown outcome.';
+COMMENT ON FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text, p_not_published boolean) IS 'Ops: record published, unknown or definitely-not-published outcome.';
 
 
 --
@@ -522,6 +609,9 @@ BEGIN
   )
   SELECT coalesce(jsonb_agg(to_jsonb(c)), '[]'::jsonb) INTO v_costs FROM c;
   RETURN jsonb_build_object('tasks', v_tasks, 'costByCurrencyAndSource', v_costs,
+    -- Outstanding human work regardless of the window: never re-posted automatically (fj_resolve_publish).
+    'publishUnknown', (SELECT coalesce(jsonb_agg(jsonb_build_object('postId', id, 'since', updated_at) ORDER BY updated_at), '[]'::jsonb)
+      FROM (SELECT id, updated_at FROM public.fortune_posts WHERE status = 'publish_unknown' ORDER BY updated_at LIMIT 50) u),
     'caveat', 'Missing cost is unobserved, not zero. Customer-host LLM costs are not observable.');
 END $$;
 
@@ -530,7 +620,7 @@ END $$;
 -- Name: FUNCTION fj_operation_report(p_from timestamp with time zone, p_until timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fj_operation_report(p_from timestamp with time zone, p_until timestamp with time zone) IS 'Ops report: run outcomes and recorded costs with provenance.';
+COMMENT ON FUNCTION public.fj_operation_report(p_from timestamp with time zone, p_until timestamp with time zone) IS 'Ops report: run outcomes, recorded costs with provenance, outstanding unknown publishes.';
 
 
 --
@@ -729,6 +819,47 @@ COMMENT ON FUNCTION public.fj_record_funnel(p_user_id uuid, p_event text, p_dedu
 
 
 --
+-- Name: fj_resolve_publish(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fj_resolve_publish(p_post_id uuid, p_external_id text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $_$
+DECLARE
+  v_post public.fortune_posts%ROWTYPE;
+BEGIN
+  IF p_post_id IS NULL OR (p_external_id IS NOT NULL AND p_external_id !~ '^[0-9]{1,80}$') THEN
+    RAISE EXCEPTION 'INVALID_RESOLUTION';
+  END IF;
+  SELECT * INTO v_post FROM public.fortune_posts WHERE id = p_post_id FOR UPDATE;
+  IF NOT FOUND OR v_post.status <> 'publish_unknown' THEN
+    RAISE EXCEPTION 'POST_NOT_UNKNOWN';
+  END IF;
+  PERFORM 1 FROM public.automation_runs WHERE post_id = p_post_id AND task = 'publish_post' FOR UPDATE;
+  IF p_external_id IS NOT NULL THEN
+    UPDATE public.fortune_posts SET status = 'published', external_post_id = p_external_id, published_at = now()
+    WHERE id = p_post_id;
+  ELSE
+    UPDATE public.fortune_posts SET status = 'approved' WHERE id = p_post_id;
+  END IF;
+  UPDATE public.automation_runs SET
+    status = CASE WHEN p_external_id IS NOT NULL THEN 'succeeded' ELSE 'failed' END,
+    finished_at = coalesce(finished_at, now()),
+    error_code = CASE WHEN p_external_id IS NOT NULL THEN 'RESOLVED_PUBLISHED' ELSE 'RESOLVED_NOT_PUBLISHED' END
+  WHERE post_id = p_post_id AND task = 'publish_post' AND status IN ('unknown', 'running');
+  RETURN jsonb_build_object('resolved', true, 'status', CASE WHEN p_external_id IS NOT NULL THEN 'published' ELSE 'approved' END);
+END $_$;
+
+
+--
+-- Name: FUNCTION fj_resolve_publish(p_post_id uuid, p_external_id text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fj_resolve_publish(p_post_id uuid, p_external_id text) IS 'Ops: human reconciliation of a publish_unknown post (published with id, or not published).';
+
+
+--
 -- Name: fj_revenue_report(timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -753,7 +884,9 @@ BEGIN
     GROUP BY currency, currency_exponent
   )
   SELECT jsonb_build_object('rows', coalesce(jsonb_agg(to_jsonb(sums)), '[]'::jsonb),
-    'measure', 'net_cash_collected_not_mrr_or_accounting_revenue')
+    'measure', 'net_cash_collected_not_mrr_or_accounting_revenue',
+    'eventsNeedingReconciliation', (SELECT count(*) FROM public.billing_events
+      WHERE state_disposition = 'needs_reconciliation' AND received_at >= p_from AND received_at < p_until))
   INTO v_output FROM sums;
   RETURN v_output;
 END $$;
@@ -763,7 +896,7 @@ END $$;
 -- Name: FUNCTION fj_revenue_report(p_from timestamp with time zone, p_until timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fj_revenue_report(p_from timestamp with time zone, p_until timestamp with time zone) IS 'Ops report: net cash collected per currency (not MRR).';
+COMMENT ON FUNCTION public.fj_revenue_report(p_from timestamp with time zone, p_until timestamp with time zone) IS 'Ops report: net cash collected per currency (not MRR) and billing events needing reconciliation.';
 
 
 --
@@ -1055,9 +1188,9 @@ CREATE VIEW public.fj_cash_events WITH (security_invoker='true') AS
 
 CREATE TABLE public.subscriptions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    user_id uuid NOT NULL,
+    user_id uuid,
     provider text NOT NULL,
-    provider_customer_id text NOT NULL,
+    provider_customer_id text,
     provider_subscription_id text NOT NULL,
     status text NOT NULL,
     current_period_end timestamp with time zone,
@@ -1071,6 +1204,7 @@ CREATE TABLE public.subscriptions (
     interval_months smallint,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT deleted_account_is_deidentified CHECK (((user_id IS NOT NULL) OR (provider_customer_id IS NULL))),
     CONSTRAINT subscriptions_amount_minor_check CHECK ((amount_minor >= 0)),
     CONSTRAINT subscriptions_currency_check CHECK ((currency ~ '^[A-Z]{3}$'::text)),
     CONSTRAINT subscriptions_currency_exponent_check CHECK (((currency_exponent >= 0) AND (currency_exponent <= 6))),
@@ -1085,7 +1219,7 @@ CREATE TABLE public.subscriptions (
 -- Name: TABLE subscriptions; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.subscriptions IS 'Server-created binding to a provider subscription plus its latest verified state.';
+COMMENT ON TABLE public.subscriptions IS 'Server-created binding to a provider subscription plus its latest verified state. Kept de-identified after account deletion.';
 
 
 --
@@ -1603,6 +1737,13 @@ CREATE TRIGGER fj_post_edit BEFORE UPDATE ON public.fortune_posts FOR EACH ROW E
 
 
 --
+-- Name: subscriptions fj_subscription_deidentify; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER fj_subscription_deidentify BEFORE UPDATE OF user_id ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION public.fj_deidentify_subscription();
+
+
+--
 -- Name: automation_runs automation_runs_post_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1671,7 +1812,7 @@ ALTER TABLE ONLY public.reading_feedback
 --
 
 ALTER TABLE ONLY public.subscriptions
-    ADD CONSTRAINT subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+    ADD CONSTRAINT subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
 
 
 --
@@ -1759,6 +1900,15 @@ GRANT ALL ON FUNCTION public.fj_access_status(p_user_id uuid) TO service_role;
 
 
 --
+-- Name: FUNCTION fj_access_token_hook(event jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fj_access_token_hook(event jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fj_access_token_hook(event jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fj_access_token_hook(event jsonb) TO supabase_auth_admin;
+
+
+--
 -- Name: FUNCTION fj_apply_billing(p_provider text, p_event_id text, p_event jsonb); Type: ACL; Schema: public; Owner: -
 --
 
@@ -1799,11 +1949,18 @@ GRANT ALL ON FUNCTION public.fj_cohort_report(p_from timestamp with time zone, p
 
 
 --
--- Name: FUNCTION fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION fj_deidentify_subscription(); Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text) TO service_role;
+REVOKE ALL ON FUNCTION public.fj_deidentify_subscription() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text, p_not_published boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text, p_not_published boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text, p_not_published boolean) TO service_role;
 
 
 --
@@ -1859,6 +2016,14 @@ GRANT ALL ON FUNCTION public.fj_record_calculation(p_user_id uuid, p_request_id 
 
 REVOKE ALL ON FUNCTION public.fj_record_funnel(p_user_id uuid, p_event text, p_dedupe_key text, p_channel text, p_evidence text, p_reading_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fj_record_funnel(p_user_id uuid, p_event text, p_dedupe_key text, p_channel text, p_evidence text, p_reading_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION fj_resolve_publish(p_post_id uuid, p_external_id text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fj_resolve_publish(p_post_id uuid, p_external_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fj_resolve_publish(p_post_id uuid, p_external_id text) TO service_role;
 
 
 --

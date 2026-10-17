@@ -32,7 +32,7 @@ BEGIN
   END LOOP;
 
   FOR fn IN
-    SELECT p.oid, p.oid::regprocedure AS signature, p.prosecdef, p.proconfig, p.prorettype = 'trigger'::regtype AS is_trigger
+    SELECT p.oid, p.proname, p.oid::regprocedure AS signature, p.prosecdef, p.proconfig, p.prorettype = 'trigger'::regtype AS is_trigger
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public'
   LOOP
@@ -44,6 +44,10 @@ BEGIN
     END IF;
     IF has_function_privilege('anon', fn.oid, 'EXECUTE') OR has_function_privilege('authenticated', fn.oid, 'EXECUTE') THEN
       RAISE EXCEPTION 'client role can execute %', fn.signature;
+    END IF;
+    -- Supabase Auth (supabase_auth_admin) may run the token hook and nothing else in this schema.
+    IF (fn.proname = 'fj_access_token_hook') <> has_function_privilege('supabase_auth_admin', fn.oid, 'EXECUTE') THEN
+      RAISE EXCEPTION 'supabase_auth_admin EXECUTE on % is wrong', fn.signature;
     END IF;
     IF NOT fn.is_trigger AND NOT has_function_privilege('service_role', fn.oid, 'EXECUTE') THEN
       RAISE EXCEPTION 'backend cannot execute %', fn.signature;

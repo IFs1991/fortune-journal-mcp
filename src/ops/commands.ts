@@ -1,6 +1,13 @@
 import {z} from 'zod';
 import {collectAccountMetrics, collectPostMetrics} from '@/src/ops/insights';
-import {approvePost, draftPost, importPosts, publishPost, referralLink} from '@/src/ops/posts';
+import {
+  approvePost,
+  draftPost,
+  importPosts,
+  publishPost,
+  referralLink,
+  resolvePublish,
+} from '@/src/ops/posts';
 import {report} from '@/src/ops/report';
 import {recordExternalRun, recordRunCost} from '@/src/ops/runs';
 
@@ -60,6 +67,17 @@ export const opsCommand = z.discriminatedUnion('action', [
   }),
   command('approve_post', {postId: uuid, bodySha256: z.string().regex(/^[a-f0-9]{64}$/)}),
   command('publish_post', {postId: uuid}),
+  // After a person checked the Threads profile for a publish_unknown post.
+  command('resolve_publish', {
+    postId: uuid,
+    outcome: z.enum(['published', 'not_published']),
+    externalPostId: z
+      .string()
+      .regex(/^\d{1,80}$/)
+      .optional(),
+  }).refine((input) => (input.outcome === 'published') === (input.externalPostId !== undefined), {
+    message: 'externalPostId is required exactly when outcome is published',
+  }),
   command('collect_post_metrics', {postId: uuid, kind: z.enum(['manual', 'backfill_now']).default('manual')}),
   command('collect_account_metrics', {since: timestamp, until: timestamp}),
   command('import_posts', {after: z.string().max(2048).optional()}),
@@ -88,6 +106,8 @@ export function runCommand(input: OpsCommand): Promise<unknown> {
       return approvePost(input.postId, input.bodySha256);
     case 'publish_post':
       return publishPost(input.postId);
+    case 'resolve_publish':
+      return resolvePublish(input.postId, input.externalPostId ?? null);
     case 'collect_post_metrics':
       return collectPostMetrics(input.postId, input.requestId, {kind: input.kind});
     case 'collect_account_metrics':
@@ -115,6 +135,8 @@ const PUBLIC_ERRORS = new Set([
   'THREADS_RATE_LIMITED',
   'THREADS_PERMISSION_DENIED',
   'POST_NOT_FOUND',
+  'POST_NOT_UNKNOWN',
+  'EXTERNAL_ID_CONFLICT',
 ]);
 export function publicErrorCode(error: unknown): string {
   return error instanceof Error && PUBLIC_ERRORS.has(error.message) ? error.message : 'OPERATION_FAILED';

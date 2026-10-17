@@ -77,9 +77,17 @@ export async function approvePost(postId: string, bodySha256: string) {
   return {approved: true, postId, bodySha256};
 }
 
-export async function publishPost(postId: string) {
+/**
+ * Publishes one approved post at most once. Outcomes:
+ *  - success: Threads returned the post id and it was recorded.
+ *  - failed: the error happened before the publish call (container creation or saving it), so nothing can be
+ *    live; the post is back to 'approved' and a new explicit publish_post may try again.
+ *  - unknown: the publish call was sent but its result is not confirmed (timeout, lost or malformed response, or
+ *    the success could not be recorded). Never re-posted automatically: a person checks the Threads profile and
+ *    calls resolve_publish. Every unknown is an automation_runs row (status unknown) and an FJ_PUBLISH_UNKNOWN log.
+ */
+export async function publishPost(postId: string, api: ThreadsClient = threadsClient()) {
   if (!isEnabled('THREADS_PUBLISH_ENABLED')) throw new Error('PUBLISH_DISABLED');
-  const api = threadsClient();
   const db = adminSupabase();
   const {data: post, error: postError} = await db
     .from('fortune_posts')
@@ -95,9 +103,26 @@ export async function publishPost(postId: string) {
   });
   if (claimError) throw new Error('PUBLISH_NOT_CLAIMED');
   const run = parseRunLease(claimed);
-  if (!run.acquired) return {published: false, disposition: run.status};
+  if (!run.acquired) return {published: false, outcome: 'not_claimed', disposition: run.status, postId};
 
-  let containerId: string | null = null;
+  const finish = async (
+    externalId: string | null,
+    containerId: string | null,
+    code: string | null,
+    notPublished = false,
+  ) => {
+    const {data, error} = await db.rpc('fj_finish_publish', {
+      p_post_id: postId,
+      p_run_id: run.runId,
+      p_external_id: externalId,
+      p_container_id: containerId,
+      p_error: code,
+      p_not_published: notPublished,
+    });
+    return !error && data === true;
+  };
+
+  let containerId: string;
   try {
     containerId = await api.createTextContainer(post.body);
     const {data: saved, error: saveError} = await db
@@ -108,26 +133,71 @@ export async function publishPost(postId: string) {
       .select('id')
       .single();
     if (saveError || !saved) throw new Error('CONTAINER_PERSIST_FAILED');
-    const externalPostId = await api.publishContainer(containerId);
-    const {data: finished, error: finishError} = await db.rpc('fj_finish_publish', {
-      p_post_id: postId,
-      p_run_id: run.runId,
-      p_external_id: externalPostId,
-      p_container_id: containerId,
-    });
-    if (finishError || finished !== true) throw new Error('PUBLISH_COMPLETION_FAILED');
-    return {published: true, externalPostId, postId};
   } catch (error) {
-    // A network error or a failed final write never proves the remote POST did not happen: record unknown.
-    await db.rpc('fj_finish_publish', {
-      p_post_id: postId,
-      p_run_id: run.runId,
-      p_external_id: null,
-      p_container_id: containerId,
-      p_error: safeErrorCode(error),
-    });
-    return {published: null, disposition: 'publish_unknown', postId, errorCode: safeErrorCode(error)};
+    // The publish call was never made: definitely not live.
+    const errorCode = safeErrorCode(error);
+    const recorded = await finish(null, null, errorCode, true);
+    console.error(JSON.stringify({code: 'FJ_PUBLISH_FAILED', postId, errorCode, recorded}));
+    return {
+      published: false,
+      outcome: 'failed',
+      disposition: 'not_published',
+      retryable: true,
+      postId,
+      errorCode,
+      recorded,
+    };
   }
+
+  let externalPostId: string | null = null;
+  try {
+    externalPostId = await api.publishContainer(containerId);
+    if (!(await finish(externalPostId, containerId, null))) throw new Error('PUBLISH_COMPLETION_FAILED');
+    return {published: true, outcome: 'success', externalPostId, postId};
+  } catch (error) {
+    const errorCode = safeErrorCode(error);
+    if (externalPostId !== null) {
+      // Threads confirmed the post; only recording failed. Retry the write once, then read the state back.
+      if (await finish(externalPostId, containerId, null))
+        return {published: true, outcome: 'success', externalPostId, postId};
+      const {data: row} = await db
+        .from('fortune_posts')
+        .select('status,external_post_id')
+        .eq('id', postId)
+        .single();
+      if (row?.status === 'published' && row.external_post_id === externalPostId)
+        return {published: true, outcome: 'success', externalPostId, postId};
+    }
+    const recorded = await finish(null, containerId, errorCode);
+    console.error(JSON.stringify({code: 'FJ_PUBLISH_UNKNOWN', postId, errorCode, recorded}));
+    return {
+      published: null,
+      outcome: 'unknown',
+      disposition: 'publish_unknown',
+      postId,
+      errorCode,
+      recorded,
+      // A Threads id we did receive, so the operator can resolve without searching.
+      ...(externalPostId ? {externalPostId} : {}),
+      recovery:
+        'Do not publish again. Check the Threads profile, then resolve_publish with the live post id, or with ' +
+        'outcome not_published if it is absent; only then may publish_post run again.',
+    };
+  }
+}
+
+/** Human decision on a publish_unknown post (see publishPost). */
+export async function resolvePublish(postId: string, externalPostId: string | null) {
+  const {data, error} = await adminSupabase().rpc('fj_resolve_publish', {
+    p_post_id: postId,
+    p_external_id: externalPostId,
+  });
+  if (error) {
+    if (error.message === 'POST_NOT_UNKNOWN') throw new Error('POST_NOT_UNKNOWN');
+    if (error.code === UNIQUE_VIOLATION) throw new Error('EXTERNAL_ID_CONFLICT');
+    throw new Error('POST_BACKEND_FAILURE');
+  }
+  return data as {resolved: boolean; status: string};
 }
 
 /** Imports one page of already-published posts. Existing external ids are skipped, never overwritten. */

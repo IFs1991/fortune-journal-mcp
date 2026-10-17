@@ -15,7 +15,7 @@ Full DDL: [supabase/schema.sql](../../supabase/schema.sql).
 | `funnel_events` | 11 | on | 0 | none | Optional, consented product events. Deleted on withdrawal; no anonymous tracking IDs. |
 | `post_metric_snapshots` | 13 | on | 0 | none | Observed lifetime counters of one post at an actual time (400 days). |
 | `reading_feedback` | 8 | on | 0 | none | Optional fixed-label feedback for one of the user's own readings. |
-| `subscriptions` | 17 | on | 0 | none | Server-created binding to a provider subscription plus its latest verified state. |
+| `subscriptions` | 17 | on | 0 | none | Server-created binding to a provider subscription plus its latest verified state. Kept de-identified after account deletion. |
 | `user_access` | 11 | on | 0 | none | One row per user: trial window, suspension and optional-consent state. No birth or journal data. |
 | `user_readings` | 11 | on | 0 | none | 90-day operational ledger: one row per consumed usage unit / idempotent request. No reading text. |
 
@@ -34,20 +34,23 @@ All are `SECURITY INVOKER` with `search_path = '` unless marked. `service_role` 
 | Function | Returns | Volatility | service_role | Note |
 |---|---|---|---|---|
 | `fj_access_status(p_user_id uuid)` | text | stable | yes | The only tier rule: suspended > verified current subscription > trial > free. |
-| `fj_apply_billing(p_provider text, p_event_id text, p_event jsonb)` | jsonb | volatile | yes | Billing adapter (not connected): idempotent verified event + ordered subscription snapshot. |
+| `fj_access_token_hook(event jsonb)` | jsonb | stable | yes | Supabase Auth hook: OAuth-client tokens get aud=urn:fortune-journal:mcp. |
+| `fj_apply_billing(p_provider text, p_event_id text, p_event jsonb)` | jsonb | volatile | yes | Billing adapter (not connected): idempotent verified event, cash counted once, ordered/reconciled subscription snapshot. |
 | `fj_approve_post(p_id uuid, p_hash text)` | boolean | volatile | yes | Ops: approve a draft bound to its body hash. |
-| `fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid)` | jsonb | volatile | yes | Ops: acquire an idempotent run lease (publish is never retried). |
+| `fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid)` | jsonb | volatile | yes | Ops: acquire an idempotent run lease (publish never retried automatically; exhausted keys reported). |
 | `fj_claim_publish(p_post_id uuid, p_expected_hash text)` | jsonb | volatile | yes | Ops: claim an approved, due post for publishing (one claim only). |
 | `fj_cohort_report(p_from timestamp with time zone, p_until timestamp with time zone, p_asof timestamp with time zone)` | jsonb | volatile | yes | Ops report: consented signup cohorts (activation, D7, paid 35d). |
-| `fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text)` | boolean | volatile | yes | Ops: record published or unknown outcome. |
+| `fj_deidentify_subscription()` | trigger | volatile | no | Trigger: a subscription binding of a deleted account drops the provider customer id. |
+| `fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text, p_not_published boolean)` | boolean | volatile | yes | Ops: record published, unknown or definitely-not-published outcome. |
 | `fj_finish_run(p_run_id uuid, p_attempt integer, p_success boolean, p_error text)` | boolean | volatile | yes | Ops: finish the current attempt of a non-publish run. |
 | `fj_follower_growth(p_account text, p_until timestamp with time zone)` | jsonb | volatile | yes | Ops report: 7-day follower change from two fresh endpoint snapshots. |
 | `fj_guard_post_edit()` | trigger | volatile | no | Trigger: published bodies are immutable; edits withdraw approval. |
-| `fj_operation_report(p_from timestamp with time zone, p_until timestamp with time zone)` | jsonb | volatile | yes | Ops report: run outcomes and recorded costs with provenance. |
+| `fj_operation_report(p_from timestamp with time zone, p_until timestamp with time zone)` | jsonb | volatile | yes | Ops report: run outcomes, recorded costs with provenance, outstanding unknown publishes. |
 | `fj_purge_expired()` | jsonb | volatile | yes | Cron: 90/400-day retention and expired publish leases to unknown. |
 | `fj_record_calculation(p_user_id uuid, p_request_id uuid, p_fingerprint text, p_feature text, p_algorithm text, p_target_date date, p_topic text, p_client text, p_collect_analytics boolean)` | jsonb | volatile | yes | MCP calculate_numerology/draw_tarot: trial start, tier, idempotent replay, usage limit and ledger row in one transaction. |
 | `fj_record_funnel(p_user_id uuid, p_event text, p_dedupe_key text, p_channel text, p_evidence text, p_reading_id uuid)` | boolean | volatile | yes | MCP: consented connection telemetry and explicit self-reports. |
-| `fj_revenue_report(p_from timestamp with time zone, p_until timestamp with time zone)` | jsonb | volatile | yes | Ops report: net cash collected per currency (not MRR). |
+| `fj_resolve_publish(p_post_id uuid, p_external_id text)` | jsonb | volatile | yes | Ops: human reconciliation of a publish_unknown post (published with id, or not published). |
+| `fj_revenue_report(p_from timestamp with time zone, p_until timestamp with time zone)` | jsonb | volatile | yes | Ops report: net cash collected per currency (not MRR) and billing events needing reconciliation. |
 | `fj_set_attribution(p_user_id uuid, p_channel text, p_evidence text, p_post_id uuid)` | boolean | volatile | yes | Login page: self-reported or signed-link source of a consenting registration. |
 | `fj_set_privacy(p_user_id uuid, p_analytics boolean, p_interests boolean, p_version text, p_registered_at timestamp with time zone)` | jsonb | volatile | yes | Login page: set optional consent; withdrawal deletes events/feedback and clears topics. |
 | `fj_submit_feedback(p_user_id uuid, p_reading_id uuid, p_usefulness smallint, p_match text, p_followup date)` | boolean | volatile | yes | MCP: consented fixed-label feedback on an own reading. |
@@ -57,6 +60,7 @@ All are `SECURITY INVOKER` with `search_path = '` unless marked. `service_role` 
 | Trigger | Table | Function |
 |---|---|---|
 | `fj_post_edit` | `fortune_posts` | `fj_guard_post_edit` |
+| `fj_subscription_deidentify` | `subscriptions` | `fj_deidentify_subscription` |
 
 ## Indexes
 
@@ -105,10 +109,10 @@ All are `SECURITY INVOKER` with `search_path = '` unless marked. `service_role` 
 | `post_metric_snapshots` | `post_metric_snapshots_post_id_fkey` | `(post_id) REFERENCES fortune_posts(id) ON DELETE CASCADE` | cascade |
 | `reading_feedback` | `reading_feedback_user_id_fkey` | `(user_id) REFERENCES auth.users(id) ON DELETE CASCADE` | cascade |
 | `reading_feedback` | `reading_feedback_user_id_reading_id_fkey` | `(user_id, reading_id) REFERENCES user_readings(user_id, id) ON DELETE CASCADE` | cascade |
-| `subscriptions` | `subscriptions_user_id_fkey` | `(user_id) REFERENCES auth.users(id) ON DELETE CASCADE` | cascade |
+| `subscriptions` | `subscriptions_user_id_fkey` | `(user_id) REFERENCES auth.users(id) ON DELETE SET NULL` | set null |
 | `user_access` | `user_access_user_id_fkey` | `(user_id) REFERENCES auth.users(id) ON DELETE CASCADE` | cascade |
 | `user_readings` | `user_readings_user_id_fkey` | `(user_id) REFERENCES auth.users(id) ON DELETE CASCADE` | cascade |
 
 ## Totals
 
-- Tables: 10, views: 3, functions: 18, triggers: 1, indexes: 30, policies: 0, foreign keys: 11, check constraints: 86
+- Tables: 10, views: 3, functions: 21, triggers: 2, indexes: 30, policies: 0, foreign keys: 11, check constraints: 87

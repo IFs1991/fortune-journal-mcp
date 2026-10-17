@@ -2,15 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   validateMcpAccessClaims,
+  validateWebSessionClaims,
   decodeJwtPayload,
   precheckMcpAccessClaims,
+  MCP_TOKEN_AUDIENCE,
 } from '../src/domain/oauth-claims.ts';
 const issuer = 'https://project.supabase.co/auth/v1',
   user = '106a4935-79ed-4e58-9804-841a85095caa',
   now = 1_800_000_000;
 const good = {
   iss: issuer,
-  aud: 'authenticated',
+  aud: MCP_TOKEN_AUDIENCE,
   sub: user,
   role: 'authenticated',
   client_id: 'client-123',
@@ -22,10 +24,26 @@ test('accepts a Supabase OAuth access token bound to the verified user and an OA
     expiresAt: now + 60,
   });
   assert.deepEqual(
-    validateMcpAccessClaims({...good, aud: ['authenticated', 'x']}, {issuer, userId: user, nowSeconds: now})
+    validateMcpAccessClaims({...good, aud: [MCP_TOKEN_AUDIENCE]}, {issuer, userId: user, nowSeconds: now})
       ?.clientId,
     'client-123',
   );
+});
+test('rejects tokens not issued for this MCP resource (RFC 8707 audience), even with a client_id', () => {
+  const opts = {issuer, userId: user, nowSeconds: now};
+  for (const aud of [
+    'authenticated',
+    ['authenticated'],
+    ['authenticated', MCP_TOKEN_AUDIENCE],
+    [MCP_TOKEN_AUDIENCE, 'https://other.example/api'],
+    'https://other.example/api/mcp',
+    [],
+    undefined,
+    MCP_TOKEN_AUDIENCE.toUpperCase(),
+  ]) {
+    assert.equal(validateMcpAccessClaims({...good, aud}, opts), null, JSON.stringify(aud));
+    assert.equal(precheckMcpAccessClaims({...good, aud}, opts), false, JSON.stringify(aud));
+  }
 });
 test('rejects browser-session tokens without client_id, foreign issuers, wrong subject, role, audience, expiry', () => {
   const opts = {issuer, userId: user, nowSeconds: now};
@@ -62,7 +80,7 @@ test('JWT payload decoding is strict about shape', () => {
 test('pre-check rejects expired, foreign-issuer and non-OAuth tokens before any network call, and never accepts on its own', () => {
   const opts = {issuer, nowSeconds: now};
   assert.equal(precheckMcpAccessClaims(good, opts), true);
-  assert.equal(precheckMcpAccessClaims({...good, aud: ['authenticated', 'x']}, opts), true);
+  assert.equal(precheckMcpAccessClaims({...good, aud: [MCP_TOKEN_AUDIENCE]}, opts), true);
   for (const bad of [
     {...good, exp: now},
     {...good, exp: now - 1},
@@ -81,4 +99,41 @@ test('pre-check rejects expired, foreign-issuer and non-OAuth tokens before any 
     validateMcpAccessClaims(good, {issuer, userId: '206a4935-79ed-4e58-9804-841a85095caa', nowSeconds: now}),
     null,
   );
+});
+
+const browser = {
+  iss: issuer,
+  aud: 'authenticated',
+  sub: user,
+  role: 'authenticated',
+  session_id: '2f0c7a1e-6c1d-4e47-9a0e-0c6d9b1f2a3b',
+  is_anonymous: false,
+  exp: now + 60,
+};
+test('web session: only a browser-session token of the verified user is accepted', () => {
+  const opts = {issuer, userId: user, nowSeconds: now};
+  assert.deepEqual(validateWebSessionClaims(browser, opts), {sessionId: browser.session_id});
+  assert.deepEqual(validateWebSessionClaims({...browser, aud: ['authenticated']}, opts), {
+    sessionId: browser.session_id,
+  });
+});
+test('web session: MCP OAuth tokens and anything ambiguous are refused (fail closed)', () => {
+  const opts = {issuer, userId: user, nowSeconds: now};
+  for (const bad of [
+    good, // a real MCP access token
+    {...browser, client_id: 'client-123'},
+    {...browser, client_id: ''},
+    {...browser, client_id: null},
+    {...browser, aud: MCP_TOKEN_AUDIENCE},
+    {...browser, aud: ['authenticated', MCP_TOKEN_AUDIENCE]},
+    {...browser, aud: 'other'},
+    {...browser, iss: 'https://other.supabase.co/auth/v1'},
+    {...browser, sub: '206a4935-79ed-4e58-9804-841a85095caa'},
+    {...browser, role: 'service_role'},
+    {...browser, is_anonymous: true},
+    {...browser, session_id: undefined},
+    {...browser, session_id: 'not-a-uuid'},
+    {...browser, exp: now},
+  ])
+    assert.equal(validateWebSessionClaims(bad, opts), null, JSON.stringify(bad));
 });

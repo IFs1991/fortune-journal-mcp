@@ -63,6 +63,63 @@ BEGIN
   IF (SELECT status FROM public.fortune_posts WHERE id = pid) <> 'publish_unknown' THEN RAISE EXCEPTION 'post not marked unknown'; END IF;
 END $$;
 
+-- ===== Publishing outcomes: definitely-not-published is retryable on request; unknown needs a person =====
+DO $$
+DECLARE
+  pid uuid := 'e1000000-0000-4000-8000-000000000004';
+  claim jsonb;
+  r jsonb;
+BEGIN
+  INSERT INTO public.fortune_posts (id, account_key, body, body_sha256) VALUES (pid, '123', 'fourth post', repeat('4', 64));
+  PERFORM public.fj_approve_post(pid, repeat('4', 64));
+  claim := public.fj_claim_publish(pid, repeat('4', 64));
+  -- Container creation failed: nothing can be live.
+  IF NOT public.fj_finish_publish(pid, (claim->>'runId')::uuid, NULL, NULL, 'THREADS_API_ERROR', true) THEN RAISE EXCEPTION 'failure not recorded'; END IF;
+  IF (SELECT status FROM public.fortune_posts WHERE id = pid) <> 'approved'
+     OR (SELECT status FROM public.automation_runs WHERE id = (claim->>'runId')::uuid) <> 'failed' THEN
+    RAISE EXCEPTION 'definite failure not recorded as failed/approved';
+  END IF;
+  -- The operator asks again: a new attempt on the same run.
+  r := public.fj_claim_publish(pid, repeat('4', 64));
+  IF NOT (r->>'acquired')::boolean OR (r->>'attempt')::int <> 2 THEN RAISE EXCEPTION 'failed publish not re-claimable: %', r; END IF;
+  -- This attempt ends unknown; "not published" can no longer be claimed by the code path.
+  PERFORM public.fj_finish_publish(pid, (r->>'runId')::uuid, NULL, '444', 'THREADS_NETWORK_ERROR');
+  IF public.fj_finish_publish(pid, (r->>'runId')::uuid, NULL, '444', 'X', true) THEN RAISE EXCEPTION 'unknown turned into not-published'; END IF;
+  r := public.fj_claim_publish(pid, repeat('4', 64));
+  IF (r->>'acquired')::boolean THEN RAISE EXCEPTION 'unknown re-claimed'; END IF;
+  -- Human reconciliation: confirmed not live -> approved -> may publish again.
+  r := public.fj_resolve_publish(pid, NULL);
+  IF r->>'status' <> 'approved' OR (SELECT error_code FROM public.automation_runs WHERE post_id = pid) <> 'RESOLVED_NOT_PUBLISHED' THEN
+    RAISE EXCEPTION 'resolution not applied: %', r;
+  END IF;
+  r := public.fj_claim_publish(pid, repeat('4', 64));
+  IF NOT (r->>'acquired')::boolean THEN RAISE EXCEPTION 'resolved post not publishable: %', r; END IF;
+  PERFORM public.fj_finish_publish(pid, (r->>'runId')::uuid, NULL, '445', 'THREADS_RESPONSE_SHAPE');
+  -- Human reconciliation: found live with id 9999.
+  r := public.fj_resolve_publish(pid, '9999');
+  IF (SELECT external_post_id FROM public.fortune_posts WHERE id = pid) <> '9999'
+     OR (SELECT status FROM public.automation_runs WHERE post_id = pid) <> 'succeeded' THEN
+    RAISE EXCEPTION 'published resolution not applied';
+  END IF;
+  BEGIN
+    PERFORM public.fj_resolve_publish(pid, NULL);
+    RAISE EXCEPTION 'published post resolved again';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'POST_NOT_UNKNOWN' THEN RAISE; END IF;
+  END;
+  BEGIN
+    PERFORM public.fj_resolve_publish(pid, 'not-digits');
+    RAISE EXCEPTION 'malformed external id accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'INVALID_RESOLUTION' THEN RAISE; END IF;
+  END;
+  -- Operation report lists outstanding unknown publishes (the expired-lease post above).
+  r := public.fj_operation_report(now() - interval '1 day', now());
+  IF NOT (r->'publishUnknown' @> jsonb_build_array(jsonb_build_object('postId', 'e1000000-0000-4000-8000-000000000002'))) THEN
+    RAISE EXCEPTION 'unknown publish missing from the report: %', r->'publishUnknown';
+  END IF;
+END $$;
+
 -- ===== Run leases for retryable tasks: at most 3 attempts, stale attempts cannot finish =====
 DO $$
 DECLARE
@@ -82,6 +139,17 @@ BEGIN
   PERFORM public.fj_finish_run((b->>'runId')::uuid, 3, false, 'THREADS_API_ERROR');
   b := public.fj_begin_run('import_posts', 'import:1', 'owner_agent');
   IF (b->>'acquired')::boolean OR b->>'status' <> 'failed' THEN RAISE EXCEPTION 'more than 3 attempts: %', b; END IF;
+  -- The refusal says no attempt will ever be granted again, so callers cannot report it as "already done".
+  IF NOT (b->>'exhausted')::boolean OR (b->>'attempts')::int <> 3 THEN RAISE EXCEPTION 'exhaustion not reported: %', b; END IF;
+  a := public.fj_begin_run('purge', 'purge:done', 'server_cron');
+  PERFORM public.fj_finish_run((a->>'runId')::uuid, 1, true);
+  b := public.fj_begin_run('purge', 'purge:done', 'server_cron');
+  IF (b->>'exhausted')::boolean OR b->>'status' <> 'succeeded' THEN RAISE EXCEPTION 'finished run reported exhausted: %', b; END IF;
+  -- A third attempt whose lease expired without finishing is exhausted too (no silent "running" forever).
+  a := public.fj_begin_run('import_posts', 'import:stuck', 'owner_agent');
+  UPDATE public.automation_runs SET attempts = 3, lease_expires_at = now() - interval '1 second' WHERE id = (a->>'runId')::uuid;
+  b := public.fj_begin_run('import_posts', 'import:stuck', 'owner_agent');
+  IF (b->>'acquired')::boolean OR NOT (b->>'exhausted')::boolean THEN RAISE EXCEPTION 'stuck attempt not exhausted: %', b; END IF;
   BEGIN
     PERFORM public.fj_begin_run('collect_post_metrics', 'k', 'owner_agent', 'e1000000-0000-4000-8000-000000000001');
     PERFORM public.fj_begin_run('collect_post_metrics', 'k', 'owner_agent', 'e1000000-0000-4000-8000-000000000002');

@@ -1,8 +1,8 @@
 import GoogleButton from './google-button';
 import {loadPreferences} from '@/src/account';
 import {readReferral} from '@/src/domain/security';
-import {serverSupabase} from '@/src/lib/supabase/server';
 import {safeNextPath} from '@/src/lib/urls';
+import {webSession} from '@/src/lib/web-session';
 
 export default async function Login({
   searchParams,
@@ -12,13 +12,12 @@ export default async function Login({
   const params = await searchParams;
   const next = safeNextPath(params.next);
   const ref = readReferral(process.env.ATTRIBUTION_HMAC_KEY, params.ref) ? params.ref : undefined;
-  const supabase = await serverSupabase();
-  const {
-    data: {user},
-  } = await supabase.auth.getUser();
+  // Only a verified browser sign-in of this app counts; an OAuth client's token in a cookie reads as signed out.
+  const session = await webSession();
+  const user = session?.user;
   // Independent reads: run them together. prefs === null means it could not be loaded (never inferred).
-  const [prefs, grants] = user
-    ? await Promise.all([loadPreferences(user.id), supabase.auth.oauth.listGrants()])
+  const [prefs, grants] = session
+    ? await Promise.all([loadPreferences(session.user.id), session.supabase.auth.oauth.listGrants()])
     : [null, null];
   return (
     <main className="stack">

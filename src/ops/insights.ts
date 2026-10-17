@@ -43,7 +43,9 @@ export async function collectPostMetrics(
     );
     if (writeError) throw new Error('SNAPSHOT_BACKEND_FAILURE');
   });
-  return outcome.acquired ? {collected: true, postId} : {collected: false, status: outcome.status};
+  return outcome.acquired
+    ? {collected: true as const, postId}
+    : {collected: false as const, status: outcome.status, exhausted: outcome.exhausted ?? false};
 }
 
 const MAX_PERIOD_MS = 31 * 86_400_000;
@@ -87,6 +89,6 @@ export async function collectAccountMetrics(
     return rows.length;
   });
   return outcome.acquired
-    ? {collected: true, rows: outcome.value}
-    : {collected: false, status: outcome.status};
+    ? {collected: true as const, rows: outcome.value}
+    : {collected: false as const, status: outcome.status, exhausted: outcome.exhausted ?? false};
 }

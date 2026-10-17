@@ -111,6 +111,16 @@ check(
   webhook.includes('501') && !webhook.includes('.rpc('),
   'billing webhook must stay 501 with no DB writes',
 );
+// Paid checkout stays off until a provider adapter is approved: no other billing route may exist.
+check(
+  readdirSync(path.join(root, 'app/api/billing')).join() === 'webhook',
+  'no billing route besides the 501 webhook (checkout is disabled until a provider is approved)',
+);
+check(
+  JSON.parse(read('.mcp.json')).mcpServers?.['fortune-journal']?.type === 'http',
+  '.mcp.json must declare the remote server with type "http"',
+);
+check(envExample.includes('WEB_SESSION_HMAC_KEY='), '.env.example must list WEB_SESSION_HMAC_KEY');
 
 if (failures.length) {
   for (const failure of failures) console.error(`FAIL: ${failure}`);
