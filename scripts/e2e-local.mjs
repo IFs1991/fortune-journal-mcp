@@ -7,6 +7,7 @@
 import {spawnSync} from 'node:child_process';
 import {createHash, createHmac, randomBytes, randomUUID} from 'node:crypto';
 import {writeFileSync} from 'node:fs';
+import {request as httpRequest} from 'node:http';
 import {createClient} from '@supabase/supabase-js';
 import {createServerClient} from '@supabase/ssr';
 import {signOps, webSessionBinding} from '../src/domain/security.ts';
@@ -365,6 +366,52 @@ try {
       JSON.stringify([decode(A.session.access_token).aud].flat()) === '["authenticated"]',
       'browser session token got the MCP audience',
     );
+  });
+
+  await step('MCP: Origin and Host are checked before the bearer (403 / 421), body is bounded', async () => {
+    const good = await mcp(accessA.access_token, 'tools/list', {}, {origin: APP});
+    ok(good.status === 200, `same-origin MCP call ${good.status}`);
+    for (const origin of ['https://evil.example', 'null', 'http://localhost:9999']) {
+      const r = await mcp(accessA.access_token, 'tools/list', {}, {origin});
+      ok(r.status === 403, `valid bearer with Origin ${origin} got ${r.status}`);
+    }
+    const noAuth = await mcp(null, 'tools/list', {}, {origin: 'https://evil.example'});
+    ok(noAuth.status === 403, `foreign Origin without bearer got ${noAuth.status}`);
+    // fetch() drops a custom Host header, so this one goes through node:http (loopback app only).
+    const rebound = await new Promise((resolve, reject) => {
+      const target = new URL('/api/mcp', APP);
+      const req = httpRequest(
+        {
+          hostname: target.hostname,
+          port: target.port,
+          path: target.pathname,
+          method: 'POST',
+          headers: {
+            host: 'evil.example',
+            authorization: `Bearer ${accessA.access_token}`,
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+          },
+        },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode);
+        },
+      );
+      req.on('error', reject);
+      req.end(JSON.stringify({jsonrpc: '2.0', id: 1, method: 'tools/list'}));
+    });
+    ok(rebound === 421, `foreign Host (DNS rebinding) got ${rebound}`);
+    const big = await fetch(`${APP}/api/mcp`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${accessA.access_token}`,
+      },
+      body: JSON.stringify({jsonrpc: '2.0', id: 1, method: 'tools/list', params: {pad: 'x'.repeat(70_000)}}),
+    });
+    ok(big.status === 413, `oversized MCP body got ${big.status}`);
   });
 
   await step('MCP: browser session JWT (no client_id) and garbage are 401 with discovery', async () => {

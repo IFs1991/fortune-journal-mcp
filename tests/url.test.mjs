@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {safeNextPath, sameOriginNavigation, sameOriginPost} from '../src/lib/urls.ts';
+import {mcpRequestCheck, safeNextPath, sameOriginNavigation, sameOriginPost} from '../src/lib/urls.ts';
 
 const APP = 'https://app.example';
 
@@ -84,4 +84,26 @@ test('cookie-authenticated GET (export) refuses cross-site requests', () => {
   assert.equal(sameOriginNavigation(get({'sec-fetch-site': 'cross-site'}), APP), false);
   assert.equal(sameOriginNavigation(get({'sec-fetch-site': 'same-site'}), APP), false);
   assert.equal(sameOriginNavigation(get({origin: 'https://attacker.example'}), APP), false);
+});
+
+test('MCP: a present but foreign Origin is 403 material; absent Origin is allowed; Host must be ours', () => {
+  const mcp = (headers) => new Request(`${APP}/api/mcp`, {method: 'POST', headers});
+  const host = {host: 'app.example'};
+  assert.equal(mcpRequestCheck(mcp(host), APP, []), 'ok');
+  assert.equal(mcpRequestCheck(mcp({...host, origin: APP}), APP, []), 'ok');
+  assert.equal(
+    mcpRequestCheck(mcp({...host, origin: 'https://claude.ai'}), APP, ['https://claude.ai']),
+    'ok',
+  );
+  for (const origin of [
+    'https://evil.example',
+    'null',
+    'http://app.example',
+    'https://app.example.evil.test',
+  ])
+    assert.equal(mcpRequestCheck(mcp({...host, origin}), APP, ['https://claude.ai']), 'forbidden_origin');
+  // DNS rebinding: attacker's name resolves to our IP; the Host header still names the attacker.
+  assert.equal(mcpRequestCheck(mcp({host: 'evil.example'}), APP, []), 'misdirected_host');
+  assert.equal(mcpRequestCheck(mcp({host: '127.0.0.1:3000'}), APP, []), 'misdirected_host');
+  assert.equal(mcpRequestCheck(mcp({}), APP, []), 'misdirected_host');
 });

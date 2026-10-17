@@ -16,6 +16,17 @@ export function appOrigin(): string {
   return origin;
 }
 
+/**
+ * Extra browser origins allowed to call /api/mcp (MCP_ALLOWED_ORIGINS, comma-separated exact HTTPS origins).
+ * Empty by default: ChatGPT and Claude connect from their servers without an Origin header.
+ */
+export function mcpAllowedOrigins(): string[] {
+  return (process.env.MCP_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => /^https:\/\/[a-z0-9.-]+(:\d+)?$/.test(value));
+}
+
 /** Feature switches. All default to off; see .env.example. */
 type Flag =
   'PRODUCT_ANALYTICS_ENABLED' | 'OPERATIONS_ENABLED' | 'THREADS_INSIGHTS_ENABLED' | 'THREADS_PUBLISH_ENABLED';

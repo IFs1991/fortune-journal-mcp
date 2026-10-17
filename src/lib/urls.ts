@@ -41,3 +41,19 @@ export function sameOriginNavigation(req: Request, expectedOrigin: string): bool
   const origin = req.headers.get('origin');
   return origin === null || origin === expectedOrigin;
 }
+
+/**
+ * MCP Streamable HTTP transport rule: an Origin header that is present and not allowed is refused with 403
+ * (DNS rebinding, browser pages). Server-side MCP hosts (ChatGPT, Claude) send no Origin and are unaffected.
+ * The Host must be APP_ORIGIN's host, so a rebound or foreign name never reaches the handler.
+ */
+export function mcpRequestCheck(
+  req: Request,
+  appOrigin: string,
+  allowedOrigins: readonly string[],
+): 'ok' | 'forbidden_origin' | 'misdirected_host' {
+  const origin = req.headers.get('origin');
+  if (origin !== null && origin !== appOrigin && !allowedOrigins.includes(origin)) return 'forbidden_origin';
+  const host = req.headers.get('host');
+  return host !== null && host.toLowerCase() === new URL(appOrigin).host ? 'ok' : 'misdirected_host';
+}
