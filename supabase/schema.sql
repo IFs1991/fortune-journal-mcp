@@ -293,7 +293,10 @@ BEGIN
     RETURNING * INTO v_run;
     RETURN jsonb_build_object('acquired', true, 'runId', v_run.id, 'attempt', v_run.attempts);
   END IF;
-  RETURN jsonb_build_object('acquired', false, 'runId', v_run.id, 'status', v_run.status);
+  RETURN jsonb_build_object('acquired', false, 'runId', v_run.id, 'status', v_run.status, 'attempts', v_run.attempts,
+    'errorCode', v_run.error_code,
+    'exhausted', v_run.attempts >= 3 AND (v_run.status = 'failed'
+      OR (v_run.status = 'running' AND v_run.lease_expires_at <= now())));
 END $$;
 
 
@@ -301,7 +304,7 @@ END $$;
 -- Name: FUNCTION fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid) IS 'Ops: acquire an idempotent run lease (publish is never retried).';
+COMMENT ON FUNCTION public.fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid) IS 'Ops: acquire an idempotent run lease (publish is never retried; exhausted keys reported).';
 
 
 --

@@ -6,7 +6,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-/** Vercel Cron (vercel.json). Emits one greppable FJ_MAINTENANCE_* line per run for log alerts; no payloads. */
+/**
+ * Vercel Cron (vercel.json). Emits one greppable FJ_MAINTENANCE_* line per run for log alerts (codes and counts
+ * only, no payloads). Any failed step, including one that ran out of attempts, answers 500 so the invocation is
+ * marked failed in Vercel's cron and function logs; the body still lists every step.
+ */
 export async function GET(request: Request) {
   let cronSecret: string;
   try {
@@ -20,10 +24,10 @@ export async function GET(request: Request) {
   }
   try {
     const value = await maintenance();
-    const failures = value.results.filter((step) => 'errorCode' in step || step.purged === false).length;
+    const {failures, permanentFailures, errorCodes} = value;
     const code = failures ? 'FJ_MAINTENANCE_PARTIAL_FAILURE' : 'FJ_MAINTENANCE_OK';
-    console[failures ? 'error' : 'info'](JSON.stringify({code, failures}));
-    return Response.json(value, {headers: {'Cache-Control': 'no-store'}});
+    console[failures ? 'error' : 'info'](JSON.stringify({code, failures, permanentFailures, errorCodes}));
+    return Response.json(value, {status: failures ? 500 : 200, headers: {'Cache-Control': 'no-store'}});
   } catch (error) {
     const reason = error instanceof Error && /^[A-Z_]+$/.test(error.message) ? error.message : 'UNEXPECTED';
     console.error(JSON.stringify({code: 'FJ_MAINTENANCE_FAILED', reason}));

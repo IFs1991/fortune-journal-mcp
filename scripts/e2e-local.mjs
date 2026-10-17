@@ -1094,7 +1094,7 @@ try {
   );
 
   await step(
-    'Cron: bearer CRON_SECRET required; maintenance purges via the app (Threads insights off)',
+    'Cron: bearer CRON_SECRET required; maintenance purges via the app; exhausted retries answer 500',
     async () => {
       ok((await fetch(`${APP}/api/cron/maintenance`)).status === 401, 'cron without secret');
       ok(
@@ -1112,9 +1112,52 @@ try {
       });
       const body = await r.json();
       ok(
-        r.status === 200 && body.insights === 'disabled' && body.results.every((x) => x.purged !== false),
+        r.status === 200 &&
+          body.ok === true &&
+          body.insights === 'disabled' &&
+          body.results[0]?.step === 'purge',
         `maintenance ${r.status} ${JSON.stringify(body).slice(0, 120)}`,
       );
+      // Today's purge out of attempts: the cron invocation fails (500) instead of reporting OK.
+      const key = `purge:${new Date().toISOString().slice(0, 10)}`;
+      const {data: run} = await admin
+        .from('automation_runs')
+        .select('id,status,attempts,error_code,finished_at')
+        .eq('task', 'purge')
+        .eq('idempotency_key', key)
+        .single();
+      ok(run, 'purge run not recorded');
+      await admin
+        .from('automation_runs')
+        .update({
+          status: 'failed',
+          attempts: 3,
+          error_code: 'PURGE_FAILED',
+          finished_at: new Date().toISOString(),
+        })
+        .eq('id', run.id);
+      try {
+        const failed = await fetch(`${APP}/api/cron/maintenance`, {
+          headers: {authorization: `Bearer ${process.env.CRON_SECRET}`},
+        });
+        const out = await failed.json();
+        ok(
+          failed.status === 500 &&
+            out.ok === false &&
+            out.results[0]?.errorCode === 'PURGE_RETRIES_EXHAUSTED',
+          `exhausted purge reported ${failed.status} ${JSON.stringify(out).slice(0, 160)}`,
+        );
+      } finally {
+        await admin
+          .from('automation_runs')
+          .update({
+            status: run.status,
+            attempts: run.attempts,
+            error_code: run.error_code,
+            finished_at: run.finished_at,
+          })
+          .eq('id', run.id);
+      }
     },
   );
 

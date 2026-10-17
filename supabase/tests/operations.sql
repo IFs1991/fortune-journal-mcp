@@ -82,6 +82,17 @@ BEGIN
   PERFORM public.fj_finish_run((b->>'runId')::uuid, 3, false, 'THREADS_API_ERROR');
   b := public.fj_begin_run('import_posts', 'import:1', 'owner_agent');
   IF (b->>'acquired')::boolean OR b->>'status' <> 'failed' THEN RAISE EXCEPTION 'more than 3 attempts: %', b; END IF;
+  -- The refusal says no attempt will ever be granted again, so callers cannot report it as "already done".
+  IF NOT (b->>'exhausted')::boolean OR (b->>'attempts')::int <> 3 THEN RAISE EXCEPTION 'exhaustion not reported: %', b; END IF;
+  a := public.fj_begin_run('purge', 'purge:done', 'server_cron');
+  PERFORM public.fj_finish_run((a->>'runId')::uuid, 1, true);
+  b := public.fj_begin_run('purge', 'purge:done', 'server_cron');
+  IF (b->>'exhausted')::boolean OR b->>'status' <> 'succeeded' THEN RAISE EXCEPTION 'finished run reported exhausted: %', b; END IF;
+  -- A third attempt whose lease expired without finishing is exhausted too (no silent "running" forever).
+  a := public.fj_begin_run('import_posts', 'import:stuck', 'owner_agent');
+  UPDATE public.automation_runs SET attempts = 3, lease_expires_at = now() - interval '1 second' WHERE id = (a->>'runId')::uuid;
+  b := public.fj_begin_run('import_posts', 'import:stuck', 'owner_agent');
+  IF (b->>'acquired')::boolean OR NOT (b->>'exhausted')::boolean THEN RAISE EXCEPTION 'stuck attempt not exhausted: %', b; END IF;
   BEGIN
     PERFORM public.fj_begin_run('collect_post_metrics', 'k', 'owner_agent', 'e1000000-0000-4000-8000-000000000001');
     PERFORM public.fj_begin_run('collect_post_metrics', 'k', 'owner_agent', 'e1000000-0000-4000-8000-000000000002');

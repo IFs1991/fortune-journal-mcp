@@ -37,7 +37,7 @@ All are `SECURITY INVOKER` with `search_path = '` unless marked. `service_role` 
 | `fj_access_token_hook(event jsonb)` | jsonb | immutable | yes | Supabase Auth hook: OAuth-client tokens get aud=urn:fortune-journal:mcp. |
 | `fj_apply_billing(p_provider text, p_event_id text, p_event jsonb)` | jsonb | volatile | yes | Billing adapter (not connected): idempotent verified event, cash counted once, ordered/reconciled subscription snapshot. |
 | `fj_approve_post(p_id uuid, p_hash text)` | boolean | volatile | yes | Ops: approve a draft bound to its body hash. |
-| `fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid)` | jsonb | volatile | yes | Ops: acquire an idempotent run lease (publish is never retried). |
+| `fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid)` | jsonb | volatile | yes | Ops: acquire an idempotent run lease (publish is never retried; exhausted keys reported). |
 | `fj_claim_publish(p_post_id uuid, p_expected_hash text)` | jsonb | volatile | yes | Ops: claim an approved, due post for publishing (one claim only). |
 | `fj_cohort_report(p_from timestamp with time zone, p_until timestamp with time zone, p_asof timestamp with time zone)` | jsonb | volatile | yes | Ops report: consented signup cohorts (activation, D7, paid 35d). |
 | `fj_deidentify_subscription()` | trigger | volatile | no | Trigger: a subscription binding of a deleted account drops the provider customer id. |

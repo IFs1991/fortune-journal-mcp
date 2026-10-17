@@ -3,61 +3,128 @@ import {isEnabled} from '@/src/lib/env';
 import {adminSupabase} from '@/src/lib/supabase/server';
 import {collectAccountMetrics, collectPostMetrics} from '@/src/ops/insights';
 import {threadsAccount} from '@/src/ops/posts';
-import {runOnce} from '@/src/ops/runs';
+import {MAX_RUN_ATTEMPTS, RunFailure, runOnce, safeErrorCode} from '@/src/ops/runs';
 
 /** Snapshot calls per cron run, so one run always finishes well inside the function time limit. */
 const MAX_POST_SNAPSHOTS = 3;
 const HOUR_MS = 3_600_000;
 
 /**
+ * One maintenance step. `failed` is never success: `retryable` says whether a later cron run will try the same
+ * key again by itself (attempts left, transient cause) or a person must act (attempts exhausted, configuration or
+ * permission). Only fixed codes and ids of operator posts appear here; no payloads, tokens or customer data.
+ */
+export type StepResult =
+  | {step: string; status: 'succeeded' | 'already_done' | 'in_progress'; postId?: string}
+  | {step: string; status: 'failed'; errorCode: string; retryable: boolean; postId?: string};
+
+/** Causes that another attempt with the same configuration cannot fix. */
+const PERMANENT_CODES = new Set([
+  'THREADS_NOT_CONFIGURED',
+  'THREADS_PERMISSION_DENIED',
+  'SECRET_NOT_CONFIGURED',
+  'INVALID_PERIOD',
+  'POST_NOT_FOUND',
+  'IDEMPOTENCY_CONFLICT',
+]);
+
+/** Outcome of a run that was not acquired: finished earlier, held by another invocation, or out of attempts. */
+export function refusedRun(
+  step: string,
+  lease: {status: string; exhausted?: boolean; errorCode?: string | null},
+  postId?: string,
+): StepResult {
+  if (lease.exhausted || lease.status === 'failed' || lease.status === 'unknown') {
+    const errorCode = `${step.toUpperCase()}_RETRIES_EXHAUSTED`;
+    return {step, status: 'failed', errorCode, retryable: false, ...(postId ? {postId} : {})};
+  }
+  const status = lease.status === 'succeeded' ? 'already_done' : 'in_progress';
+  return {step, status, ...(postId ? {postId} : {})};
+}
+
+/** Outcome of an attempt that threw. */
+export function failedRun(step: string, error: unknown, postId?: string): StepResult {
+  const errorCode = safeErrorCode(error);
+  const attemptsLeft = !(error instanceof RunFailure) || error.attempt < MAX_RUN_ATTEMPTS;
+  return {
+    step,
+    status: 'failed',
+    errorCode,
+    retryable: attemptsLeft && !PERMANENT_CODES.has(errorCode),
+    ...(postId ? {postId} : {}),
+  };
+}
+
+export function summarize(results: StepResult[]) {
+  const failed = results.filter((result) => result.status === 'failed');
+  return {
+    ok: failed.length === 0,
+    failures: failed.length,
+    permanentFailures: failed.filter((result) => result.status === 'failed' && !result.retryable).length,
+    errorCodes: [...new Set(failed.map((result) => (result.status === 'failed' ? result.errorCode : '')))],
+  };
+}
+
+/**
  * Hourly cron: retention purge (once per UTC day), then bounded scheduled Insights collection when enabled.
- * Never publishes. Each step reports its own failure code so one failure does not hide the others.
+ * Never publishes. Each step reports its own outcome so one failure does not hide the others.
  */
 export async function maintenance(now = new Date()) {
   const day = now.toISOString().slice(0, 10);
-  const results: Record<string, unknown>[] = [];
+  const results: StepResult[] = [];
 
   try {
     const purge = await runOnce('purge', `purge:${day}`, {actor: 'server_cron'}, async () => {
       const {error} = await adminSupabase().rpc('fj_purge_expired');
       if (error) throw new Error('PURGE_FAILED');
     });
-    // Not acquired = today's purge already ran (or is running) in an earlier invocation.
-    if (purge.acquired) results.push({purged: true});
-  } catch {
-    results.push({purged: false});
+    results.push(purge.acquired ? {step: 'purge', status: 'succeeded'} : refusedRun('purge', purge));
+  } catch (error) {
+    results.push(failedRun('purge', error));
   }
-  if (!isEnabled('THREADS_INSIGHTS_ENABLED')) return {results, insights: 'disabled'};
+  if (!isEnabled('THREADS_INSIGHTS_ENABLED')) return {...summarize(results), results, insights: 'disabled'};
 
-  for (const [postId, age] of await duePostSnapshots(now)) {
+  let due: [string, SnapshotAge][] = [];
+  try {
+    due = await duePostSnapshots(now);
+  } catch (error) {
+    results.push(failedRun('snapshot_lookup', error));
+  }
+  for (const [postId, age] of due) {
     try {
+      const outcome = await collectPostMetrics(postId, `${postId}:${age}h`, {
+        targetAgeHours: age,
+        kind: 'scheduled',
+        actor: 'server_cron',
+      });
       results.push(
-        await collectPostMetrics(postId, `${postId}:${age}h`, {
-          targetAgeHours: age,
-          kind: 'scheduled',
-          actor: 'server_cron',
-        }),
+        outcome.collected
+          ? {step: 'post_snapshot', status: 'succeeded', postId}
+          : refusedRun('post_snapshot', outcome, postId),
       );
-    } catch {
-      results.push({postId, errorCode: 'SCHEDULED_SNAPSHOT_FAILED'});
+    } catch (error) {
+      results.push(failedRun('post_snapshot', error, postId));
     }
   }
 
   const today = new Date(`${day}T00:00:00Z`);
   const yesterday = new Date(+today - 24 * HOUR_MS);
   try {
-    results.push(
-      await collectAccountMetrics(
-        `account:${day}`,
-        yesterday.toISOString(),
-        today.toISOString(),
-        'server_cron',
-      ),
+    const outcome = await collectAccountMetrics(
+      `account:${day}`,
+      yesterday.toISOString(),
+      today.toISOString(),
+      'server_cron',
     );
-  } catch {
-    results.push({errorCode: 'ACCOUNT_SNAPSHOT_FAILED'});
+    results.push(
+      outcome.collected
+        ? {step: 'account_snapshot', status: 'succeeded'}
+        : refusedRun('account_snapshot', outcome),
+    );
+  } catch (error) {
+    results.push(failedRun('account_snapshot', error));
   }
-  return {results, boundedPosts: MAX_POST_SNAPSHOTS};
+  return {...summarize(results), results, boundedPosts: MAX_POST_SNAPSHOTS};
 }
 
 /** Published posts whose 24/72/168h snapshot is due now and not yet taken (two queries, no per-post lookup). */

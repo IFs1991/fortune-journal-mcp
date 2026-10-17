@@ -7,7 +7,13 @@ type Actor = 'owner_agent' | 'server_cron';
 /** Lease returned by fj_begin_run / fj_claim_publish. Parsed, so a malformed reply fails closed. */
 const runLease = z.discriminatedUnion('acquired', [
   z.object({acquired: z.literal(true), runId: z.string().uuid(), attempt: z.number().int()}),
-  z.object({acquired: z.literal(false), status: z.string()}),
+  // exhausted = no further attempt will ever be granted for this key: a failure, never "already done".
+  z.object({
+    acquired: z.literal(false),
+    status: z.string(),
+    exhausted: z.boolean().optional(),
+    errorCode: z.string().nullable().optional(),
+  }),
 ]);
 export type RunLease = z.infer<typeof runLease>;
 type ActiveRun = Extract<RunLease, {acquired: true}>;
@@ -16,6 +22,18 @@ export function parseRunLease(data: unknown): RunLease {
   const lease = runLease.safeParse(data);
   if (!lease.success) throw new Error('RUN_BACKEND_FAILURE');
   return lease.data;
+}
+
+/** Attempts per (task, key) granted by fj_begin_run; keep equal to the SQL. */
+export const MAX_RUN_ATTEMPTS = 3;
+
+/** A run attempt that failed; message is the stored error code, attempt tells whether another one will come. */
+export class RunFailure extends Error {
+  readonly attempt: number;
+  constructor(code: string, attempt: number) {
+    super(code);
+    this.attempt = attempt;
+  }
 }
 
 /** Our own errors carry UPPER_SNAKE codes; any other message (library, network text) is stored generically. */
@@ -59,17 +77,19 @@ export async function runOnce<T>(
   key: string,
   options: {postId?: string; actor?: Actor},
   work: (run: ActiveRun) => Promise<T>,
-): Promise<{acquired: true; value: T} | {acquired: false; status: string}> {
+): Promise<{acquired: true; value: T} | Extract<RunLease, {acquired: false}>> {
   const run = await beginRun(task, key, options);
   if (!run.acquired) return run;
+  let value: T;
   try {
-    const value = await work(run);
-    await finishRun(run, true);
-    return {acquired: true, value};
+    value = await work(run);
   } catch (error) {
-    await finishRun(run, false, safeErrorCode(error));
-    throw error;
+    const code = safeErrorCode(error);
+    await finishRun(run, false, code);
+    throw new RunFailure(code, run.attempt);
   }
+  await finishRun(run, true);
+  return {acquired: true, value};
 }
 
 type Cost = {

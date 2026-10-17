@@ -786,7 +786,8 @@ CREATE INDEX account_metric_snapshots_series ON public.account_metric_snapshots 
 COMMENT ON TABLE public.account_metric_snapshots IS 'One metric and interval per row; never sum follower stocks or overlapping ranges.';
 
 -- Acquire (or re-acquire) the lease for one idempotent task. Publishing is never retried automatically:
--- an expired publish lease becomes 'unknown'. Other tasks get up to 3 attempts.
+-- an expired publish lease becomes 'unknown'. Other tasks get up to 3 attempts. A refusal reports
+-- `exhausted` when no further attempt will ever be granted for this key (callers must treat it as a failure).
 CREATE FUNCTION public.fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid DEFAULT NULL) RETURNS jsonb
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
 DECLARE
@@ -818,7 +819,10 @@ BEGIN
     RETURNING * INTO v_run;
     RETURN jsonb_build_object('acquired', true, 'runId', v_run.id, 'attempt', v_run.attempts);
   END IF;
-  RETURN jsonb_build_object('acquired', false, 'runId', v_run.id, 'status', v_run.status);
+  RETURN jsonb_build_object('acquired', false, 'runId', v_run.id, 'status', v_run.status, 'attempts', v_run.attempts,
+    'errorCode', v_run.error_code,
+    'exhausted', v_run.attempts >= 3 AND (v_run.status = 'failed'
+      OR (v_run.status = 'running' AND v_run.lease_expires_at <= now())));
 END $$;
 
 -- Finishes the current attempt of a non-publish run; a stale attempt number is refused.
@@ -1086,7 +1090,7 @@ COMMENT ON FUNCTION public.fj_record_funnel(uuid, text, text, text, text, uuid) 
 COMMENT ON FUNCTION public.fj_submit_feedback(uuid, uuid, smallint, text, date) IS 'MCP: consented fixed-label feedback on an own reading.';
 COMMENT ON FUNCTION public.fj_apply_billing(text, text, jsonb) IS 'Billing adapter (not connected): idempotent verified event, cash counted once, ordered/reconciled subscription snapshot.';
 COMMENT ON FUNCTION public.fj_revenue_report(timestamptz, timestamptz) IS 'Ops report: net cash collected per currency (not MRR) and billing events needing reconciliation.';
-COMMENT ON FUNCTION public.fj_begin_run(text, text, text, uuid) IS 'Ops: acquire an idempotent run lease (publish is never retried).';
+COMMENT ON FUNCTION public.fj_begin_run(text, text, text, uuid) IS 'Ops: acquire an idempotent run lease (publish is never retried; exhausted keys reported).';
 COMMENT ON FUNCTION public.fj_finish_run(uuid, integer, boolean, text) IS 'Ops: finish the current attempt of a non-publish run.';
 COMMENT ON FUNCTION public.fj_approve_post(uuid, text) IS 'Ops: approve a draft bound to its body hash.';
 COMMENT ON FUNCTION public.fj_claim_publish(uuid, text) IS 'Ops: claim an approved, due post for publishing (one claim only).';
