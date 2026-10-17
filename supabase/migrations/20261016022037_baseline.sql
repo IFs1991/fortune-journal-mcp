@@ -41,9 +41,11 @@ COMMENT ON TABLE public.user_access IS 'One row per user: trial window, suspensi
 
 CREATE TABLE public.subscriptions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
+  -- NULL after account deletion: the binding stays (de-identified) so later refunds and chargebacks still reach
+  -- the ledger. A NULL user never matches fj_access_status, so it can grant nothing.
+  user_id uuid REFERENCES auth.users (id) ON DELETE SET NULL,
   provider text NOT NULL CHECK (provider ~ '^[a-z][a-z0-9_]{1,30}$'),
-  provider_customer_id text NOT NULL,
+  provider_customer_id text,
   provider_subscription_id text NOT NULL,
   status text NOT NULL CHECK (status IN ('incomplete', 'trialing', 'active', 'past_due', 'canceled', 'unpaid', 'expired')),
   current_period_end timestamptz,
@@ -58,10 +60,23 @@ CREATE TABLE public.subscriptions (
   interval_months smallint CHECK (interval_months BETWEEN 1 AND 12),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (provider, provider_subscription_id)
+  UNIQUE (provider, provider_subscription_id),
+  CONSTRAINT deleted_account_is_deidentified CHECK (user_id IS NOT NULL OR provider_customer_id IS NULL)
 );
 CREATE INDEX subscriptions_user ON public.subscriptions (user_id);
-COMMENT ON TABLE public.subscriptions IS 'Server-created binding to a provider subscription plus its latest verified state.';
+COMMENT ON TABLE public.subscriptions IS 'Server-created binding to a provider subscription plus its latest verified state. Kept de-identified after account deletion.';
+
+-- Account deletion sets user_id NULL (FK action); the provider customer id goes with it.
+CREATE FUNCTION public.fj_deidentify_subscription() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
+BEGIN
+  IF NEW.user_id IS NULL THEN
+    NEW.provider_customer_id := NULL;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER fj_subscription_deidentify BEFORE UPDATE OF user_id ON public.subscriptions
+FOR EACH ROW EXECUTE FUNCTION public.fj_deidentify_subscription();
 
 -- Each row is one consumed usage unit and the idempotency record of one request. Usage limits are counted
 -- from these rows (no separate counter table to keep in sync). Result text and inputs are never stored.
@@ -497,8 +512,16 @@ CREATE INDEX billing_events_cash_time ON public.billing_events (occurred_at) WHE
 COMMENT ON TABLE public.billing_events IS 'Verified, normalized provider events. Cash collections are not MRR. Not auto-purged.';
 
 -- The caller MUST have verified the provider signature and normalized the event. The user is never taken from
--- provider metadata: a server-created subscriptions binding is required. Money alone never grants Premium;
--- only a newer subscription snapshot changes entitlement.
+-- provider metadata: a server-created subscriptions binding is required (it survives account deletion,
+-- de-identified). Money alone never grants Premium; only a newer subscription snapshot changes entitlement.
+--   * Same event id again: identical = no-op, different = BILLING_IDEMPOTENCY_CONFLICT.
+--   * Another event id for the same money movement (economic_key): cash is not counted again, but the snapshot it
+--     carries is still applied when newer (a later notice often carries the newer state).
+--   * Same provider timestamp, different content (status, period, cancellation, plan, price, interval): flagged
+--     needs_reconciliation; if the two disagree on entitlement, verified_at is cleared (fail closed) until a newer
+--     snapshot or one the adapter fetched from the provider API ("reconciled": true) is applied.
+--   * Events on the binding of a deleted account that would keep it alive are flagged for a person.
+-- Concurrent deliveries for one subscription serialize on its row lock; the unique keys stop double counting.
 CREATE FUNCTION public.fj_apply_billing(p_provider text, p_event_id text, p_event jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
 DECLARE
@@ -509,11 +532,14 @@ DECLARE
   v_currency text := p_event->>'currency';
   v_exponent smallint := (p_event->>'currency_exponent')::smallint;
   v_snapshot jsonb := nullif(p_event->'subscription', 'null'::jsonb);
+  v_reconciled boolean := coalesce((p_event->>'reconciled')::boolean, false);
   v_snapshot_at timestamptz;
   v_is_cash boolean;
+  v_cash_duplicate boolean := false;
   v_disposition text := 'none';
   v_subscription public.subscriptions%ROWTYPE;
   v_previous public.billing_events%ROWTYPE;
+  v_new public.subscriptions%ROWTYPE;
 BEGIN
   IF p_provider IS NULL OR p_provider !~ '^[a-z][a-z0-9_]{1,30}$'
      OR p_event_id IS NULL OR char_length(p_event_id) NOT BETWEEN 1 AND 200
@@ -537,17 +563,28 @@ BEGIN
     RAISE EXCEPTION 'NON_FINANCIAL_AMOUNT';
   END IF;
 
-  -- Duplicate delivery (same event id) or another notification of the same money movement.
-  SELECT * INTO v_previous FROM public.billing_events
-  WHERE provider = p_provider AND (event_id = p_event_id OR economic_key = v_economic_key)
-  LIMIT 1;
+  -- Redelivery of the same event: it was fully processed the first time.
+  SELECT * INTO v_previous FROM public.billing_events WHERE provider = p_provider AND event_id = p_event_id;
   IF FOUND THEN
-    IF v_previous.event_type IS DISTINCT FROM v_kind OR v_previous.amount_minor IS DISTINCT FROM v_amount
-       OR v_previous.currency IS DISTINCT FROM v_currency OR v_previous.currency_exponent IS DISTINCT FROM v_exponent
+    IF v_previous.event_type IS DISTINCT FROM v_kind OR v_previous.economic_key IS DISTINCT FROM v_economic_key
+       OR v_previous.amount_minor IS DISTINCT FROM v_amount OR v_previous.currency IS DISTINCT FROM v_currency
+       OR v_previous.currency_exponent IS DISTINCT FROM v_exponent
        OR v_previous.provider_subscription_id IS DISTINCT FROM v_subscription.provider_subscription_id THEN
       RAISE EXCEPTION 'BILLING_IDEMPOTENCY_CONFLICT';
     END IF;
     RETURN jsonb_build_object('duplicate', true, 'stateApplied', false);
+  END IF;
+  -- Another notification of an already recorded money movement: same facts required, cash not counted again.
+  IF v_is_cash THEN
+    SELECT * INTO v_previous FROM public.billing_events WHERE provider = p_provider AND economic_key = v_economic_key;
+    IF FOUND THEN
+      IF v_previous.event_type IS DISTINCT FROM v_kind OR v_previous.amount_minor IS DISTINCT FROM v_amount
+         OR v_previous.currency IS DISTINCT FROM v_currency OR v_previous.currency_exponent IS DISTINCT FROM v_exponent
+         OR v_previous.provider_subscription_id IS DISTINCT FROM v_subscription.provider_subscription_id THEN
+        RAISE EXCEPTION 'BILLING_IDEMPOTENCY_CONFLICT';
+      END IF;
+      v_cash_duplicate := true;
+    END IF;
   END IF;
 
   IF v_snapshot IS NOT NULL THEN
@@ -556,30 +593,50 @@ BEGIN
        OR v_snapshot->>'status' NOT IN ('incomplete', 'trialing', 'active', 'past_due', 'canceled', 'unpaid', 'expired') THEN
       RAISE EXCEPTION 'INVALID_SUBSCRIPTION_SNAPSHOT';
     END IF;
-    IF v_subscription.provider_updated_at IS NULL OR v_snapshot_at > v_subscription.provider_updated_at THEN
+    v_new := v_subscription;
+    v_new.status := v_snapshot->>'status';
+    v_new.current_period_end := (v_snapshot->>'current_period_end')::timestamptz;
+    v_new.cancel_at_period_end := coalesce((v_snapshot->>'cancel_at_period_end')::boolean, false);
+    v_new.plan_key := v_snapshot->>'plan_key';
+    v_new.amount_minor := (v_snapshot->>'amount_minor')::bigint;
+    v_new.currency := v_snapshot->>'currency';
+    v_new.currency_exponent := (v_snapshot->>'currency_exponent')::smallint;
+    v_new.interval_months := (v_snapshot->>'interval_months')::smallint;
+
+    IF v_subscription.provider_updated_at IS NULL OR v_snapshot_at > v_subscription.provider_updated_at
+       OR (v_reconciled AND v_snapshot_at >= v_subscription.provider_updated_at) THEN
       UPDATE public.subscriptions SET
-        status = v_snapshot->>'status',
-        current_period_end = (v_snapshot->>'current_period_end')::timestamptz,
-        cancel_at_period_end = coalesce((v_snapshot->>'cancel_at_period_end')::boolean, false),
-        verified_at = now(),
-        provider_updated_at = v_snapshot_at,
-        plan_key = v_snapshot->>'plan_key',
-        amount_minor = (v_snapshot->>'amount_minor')::bigint,
-        currency = v_snapshot->>'currency',
-        currency_exponent = (v_snapshot->>'currency_exponent')::smallint,
-        interval_months = (v_snapshot->>'interval_months')::smallint,
-        updated_at = now()
+        status = v_new.status, current_period_end = v_new.current_period_end,
+        cancel_at_period_end = v_new.cancel_at_period_end, verified_at = now(), provider_updated_at = v_snapshot_at,
+        plan_key = v_new.plan_key, amount_minor = v_new.amount_minor, currency = v_new.currency,
+        currency_exponent = v_new.currency_exponent, interval_months = v_new.interval_months, updated_at = now()
       WHERE id = v_subscription.id;
       v_disposition := 'applied';
     ELSIF v_snapshot_at = v_subscription.provider_updated_at
-       AND (v_snapshot->>'status' IS DISTINCT FROM v_subscription.status
-         OR (v_snapshot->>'current_period_end')::timestamptz IS DISTINCT FROM v_subscription.current_period_end) THEN
+       AND (v_new.status, v_new.current_period_end, v_new.cancel_at_period_end, v_new.plan_key, v_new.amount_minor,
+            v_new.currency, v_new.currency_exponent, v_new.interval_months)
+           IS DISTINCT FROM
+           (v_subscription.status, v_subscription.current_period_end, v_subscription.cancel_at_period_end,
+            v_subscription.plan_key, v_subscription.amount_minor, v_subscription.currency,
+            v_subscription.currency_exponent, v_subscription.interval_months) THEN
+      -- The provider gave two different states for the same instant; which is newer is unknowable here.
       v_disposition := 'needs_reconciliation';
+      IF (v_new.status IN ('active', 'trialing') AND coalesce(v_new.current_period_end > now(), false))
+         IS DISTINCT FROM
+         (v_subscription.status IN ('active', 'trialing') AND coalesce(v_subscription.current_period_end > now(), false)) THEN
+        UPDATE public.subscriptions SET verified_at = NULL, updated_at = now() WHERE id = v_subscription.id;
+      END IF;
     ELSE
       v_disposition := 'older_or_identical';
     END IF;
+    IF v_subscription.user_id IS NULL AND v_new.status IN ('incomplete', 'trialing', 'active', 'past_due', 'unpaid') THEN
+      v_disposition := 'needs_reconciliation';
+    END IF;
   END IF;
 
+  IF v_cash_duplicate THEN
+    RETURN jsonb_build_object('duplicate', true, 'stateApplied', v_disposition = 'applied', 'stateDisposition', v_disposition);
+  END IF;
   INSERT INTO public.billing_events (
     provider, event_id, user_id, provider_subscription_id, event_type, occurred_at, economic_key, original_payment_key,
     amount_minor, currency, currency_exponent, billing_reason, plan_key, state_disposition
@@ -625,7 +682,9 @@ BEGIN
     GROUP BY currency, currency_exponent
   )
   SELECT jsonb_build_object('rows', coalesce(jsonb_agg(to_jsonb(sums)), '[]'::jsonb),
-    'measure', 'net_cash_collected_not_mrr_or_accounting_revenue')
+    'measure', 'net_cash_collected_not_mrr_or_accounting_revenue',
+    'eventsNeedingReconciliation', (SELECT count(*) FROM public.billing_events
+      WHERE state_disposition = 'needs_reconciliation' AND received_at >= p_from AND received_at < p_until))
   INTO v_output FROM sums;
   RETURN v_output;
 END $$;
@@ -1025,8 +1084,8 @@ COMMENT ON FUNCTION public.fj_set_privacy(uuid, boolean, boolean, text, timestam
 COMMENT ON FUNCTION public.fj_set_attribution(uuid, text, text, uuid) IS 'Login page: self-reported or signed-link source of a consenting registration.';
 COMMENT ON FUNCTION public.fj_record_funnel(uuid, text, text, text, text, uuid) IS 'MCP: consented connection telemetry and explicit self-reports.';
 COMMENT ON FUNCTION public.fj_submit_feedback(uuid, uuid, smallint, text, date) IS 'MCP: consented fixed-label feedback on an own reading.';
-COMMENT ON FUNCTION public.fj_apply_billing(text, text, jsonb) IS 'Billing adapter (not connected): idempotent verified event + ordered subscription snapshot.';
-COMMENT ON FUNCTION public.fj_revenue_report(timestamptz, timestamptz) IS 'Ops report: net cash collected per currency (not MRR).';
+COMMENT ON FUNCTION public.fj_apply_billing(text, text, jsonb) IS 'Billing adapter (not connected): idempotent verified event, cash counted once, ordered/reconciled subscription snapshot.';
+COMMENT ON FUNCTION public.fj_revenue_report(timestamptz, timestamptz) IS 'Ops report: net cash collected per currency (not MRR) and billing events needing reconciliation.';
 COMMENT ON FUNCTION public.fj_begin_run(text, text, text, uuid) IS 'Ops: acquire an idempotent run lease (publish is never retried).';
 COMMENT ON FUNCTION public.fj_finish_run(uuid, integer, boolean, text) IS 'Ops: finish the current attempt of a non-publish run.';
 COMMENT ON FUNCTION public.fj_approve_post(uuid, text) IS 'Ops: approve a draft bound to its body hash.';
@@ -1037,6 +1096,7 @@ COMMENT ON FUNCTION public.fj_follower_growth(text, timestamptz) IS 'Ops report:
 COMMENT ON FUNCTION public.fj_operation_report(timestamptz, timestamptz) IS 'Ops report: run outcomes and recorded costs with provenance.';
 COMMENT ON FUNCTION public.fj_purge_expired() IS 'Cron: 90/400-day retention and expired publish leases to unknown.';
 COMMENT ON FUNCTION public.fj_access_token_hook(jsonb) IS 'Supabase Auth hook: OAuth-client tokens get aud=urn:fortune-journal:mcp.';
+COMMENT ON FUNCTION public.fj_deidentify_subscription() IS 'Trigger: a subscription binding of a deleted account drops the provider customer id.';
 COMMENT ON FUNCTION public.fj_guard_post_edit() IS 'Trigger: published bodies are immutable; edits withdraw approval.';
 
 -- =====================================================================================================

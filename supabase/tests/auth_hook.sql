@@ -1,7 +1,9 @@
 -- Custom Access Token Hook: OAuth-client tokens get exactly the MCP audience; browser-session tokens are
--- unchanged; malformed client_id values are not upgraded. Runs as the role Supabase Auth uses. Rolled back.
+-- unchanged; malformed client_id values are not upgraded. Rolled back.
+-- Runs as supabase_auth_admin where the session may switch to it (disposable PG). On the Supabase image postgres
+-- may not; there catalog.sql checks the grant and scripts/e2e-local.mjs proves Supabase Auth runs the hook.
 BEGIN;
-SET LOCAL ROLE supabase_auth_admin;
+SELECT set_config('role', 'supabase_auth_admin', true) WHERE pg_has_role(current_user, 'supabase_auth_admin', 'MEMBER');
 DO $$
 DECLARE
   v_browser jsonb := '{"aud":"authenticated","role":"authenticated","sub":"11111111-1111-4111-8111-111111111111","session_id":"22222222-2222-4222-8222-222222222222"}';

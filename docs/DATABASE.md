@@ -21,7 +21,7 @@ v0.1初期 + v0.2追加5本 + forward-fix 3本 + テンプレート + manifest�
 | 表 | 粒度 / キー | 用途と読み書き | 保持 | 判断 |
 |---|---|---|---|---|
 | `user_access` | 1ユーザー / `user_id`（auth.users CASCADE） | Trial期間、停止、任意同意、初回計算時刻。計算ごとに行ロック（読み+まれに更新） | アカウント期間中 | 維持 |
-| `subscriptions` | 事業者契約 / `id`、`(provider, provider_subscription_id)` 一意 | サーバーが作る課金binding + 検証済み最新状態。tier判定で読む | アカウント削除でCASCADE | 維持 |
+| `subscriptions` | 事業者契約 / `id`、`(provider, provider_subscription_id)` 一意 | サーバーが作る課金binding + 検証済み最新状態。tier判定で読む | アカウント削除で `user_id`・`provider_customer_id` をNULL（bindingは残す: 削除後の返金・CBを台帳に載せるため。NULLユーザーは何も付与しない） | 変更（2026-10-17: CASCADE→de-identify） |
 | `user_readings` | 1リクエスト / `(user_id, request_id)` 一意 | **利用1回 = 1行**。冪等性と利用上限の正本。計算ごとにINSERT（replay/拒否は書かない） | 90日 | 維持（`usage_counters` を吸収、`quota_bucket` と `quota_period_start` を削除） |
 | `funnel_events` | ユーザー × dedupe key | 同意済みの任意イベント（登録・接続・計算・本人申告）。KPI用 | 90日、撤回で削除 | 維持（投稿からの `experiment_id` コピー列を削除。`post_id` から辿る） |
 | `reading_feedback` | ユーザー × reading | 固定ラベルの任意評価。複合FKで他人のreadingに付けられない | readingと連動、撤回で削除 | 維持 |
@@ -69,7 +69,7 @@ FKはすべて先頭列が一致するindexでカバー（purgeのCASCADEで子�
 
 ## 保持期限（運用上の提案値。法定期間ではない）
 
-台帳・任意イベント 90日、run（成功/失敗）90日、snapshot 400日、公開unknownと課金は自動削除しない。同意設定・初回利用日時はアカウント期間中。アカウント削除は `auth.users` からCASCADE（課金台帳は `user_id` をNULLにした行が残る。外部IDで結合可能なので匿名化ではない）。
+台帳・任意イベント 90日、run（成功/失敗）90日、snapshot 400日、公開unknownと課金は自動削除しない。同意設定・初回利用日時はアカウント期間中。アカウント削除は `auth.users` からCASCADE（課金台帳と `subscriptions` のbindingは `user_id` をNULLにした行が残る。`provider_subscription_id` で事業者側と結合可能なので匿名化ではない）。
 
 ## テスト（`supabase/tests/`）
 
@@ -78,7 +78,7 @@ FKはすべて先頭列が一致するindexでカバー（purgeのCASCADEで子�
 | `catalog.sql` | public schemaの**全**表・view・関数の権限契約（RLS、client権限なし、invoker、search_path、service_roleのみ）。read-onlyでStagingにも流せる |
 | `calculations.sql` | Trial開始、tier、上限、replay/conflict、日付越えtarot、Trial終了後replay、停止、topic同意、途中失敗の原子性 |
 | `privacy.sql` | 同意・撤回、登録コホート（捏造しない）、流入元、評価・本人申告、他人のreading拒否 |
-| `billing.sql` | 重複、経済キー、逆順、同時刻不整合、返金・チャージバック、通貨別、不正イベント、削除時の匿名化 |
+| `billing.sql` | 重複、経済キー（重複通知の新しいsnapshotは適用）、逆順、同時刻不整合（plan・価格・解約予約・間隔・通貨も比較、権限が食い違えばfail closed、`reconciled` で解消）、支払失敗、解約予約、返金・チャージバック、通貨別、不正イベント、削除後の返金記録と匿名化 |
 | `operations.sql` | 承認ハッシュ、二重claim、unknown再公開禁止、lease、試行上限、snapshot定義、KPIのNULL |
 | `retention.sql` | purgeの対象と残すもの、アカウント削除のCASCADE |
 

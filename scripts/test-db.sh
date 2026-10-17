@@ -76,6 +76,37 @@ END $$;
 SQL
 echo 'PASS: concurrency (10 distinct -> 3 + 7 limited, 10 identical -> 1 + 9 replays, cross-date tarot -> 1 reading)'
 
+# ===== Billing concurrency: parallel deliveries of one charge count cash once and keep the newest state =====
+sql <<'SQL'
+INSERT INTO auth.users (id) VALUES ('66666666-6666-4666-8666-666666666666');
+INSERT INTO public.subscriptions (user_id, provider, provider_customer_id, provider_subscription_id, status)
+VALUES ('66666666-6666-4666-8666-666666666666', 'test_provider', 'cust_parallel', 'sub_parallel', 'incomplete');
+SQL
+bill() {
+  sql -At -c "SET ROLE service_role; SELECT public.fj_apply_billing('test_provider', '$1', jsonb_build_object(
+    'event_type', 'payment_succeeded', 'provider_subscription_id', 'sub_parallel', 'occurred_at', '2026-10-01T00:00:00Z',
+    'economic_key', 'charge:parallel', 'amount_minor', 499, 'currency', 'USD', 'currency_exponent', 2, 'billing_reason', 'initial',
+    'subscription', jsonb_build_object('status', 'active', 'provider_updated_at', '$2', 'current_period_end', now() + interval '30 days')));" \
+    >"$out/bill-$3" 2>&1 &
+  pids+=("$!")
+}
+pids=()
+# The same event delivered 10 times at once, and 10 different notices of the same charge with different snapshot times.
+for n in $(seq 1 10); do bill evt_parallel_same 2026-10-01T00:00:00Z "same-$n"; done
+for n in $(seq 1 10); do bill "evt_parallel_$n" "2026-10-01T00:00:$(printf '%02d' "$n")Z" "notice-$n"; done
+for pid in "${pids[@]}"; do wait "$pid"; done
+if grep -l ERROR "$out"/bill-* >/dev/null 2>&1; then cat "$out"/bill-* >&2; echo 'parallel billing deliveries raised errors' >&2; exit 1; fi
+sql <<'SQL'
+DO $$ BEGIN
+  IF (SELECT count(*) FROM public.billing_events WHERE economic_key = 'charge:parallel') <> 1 THEN RAISE EXCEPTION 'parallel deliveries counted cash more than once'; END IF;
+  IF (SELECT provider_updated_at FROM public.subscriptions WHERE provider_subscription_id = 'sub_parallel') <> '2026-10-01T00:00:10Z' THEN
+    RAISE EXCEPTION 'newest snapshot of the duplicate notices was not kept';
+  END IF;
+  IF public.fj_access_status('66666666-6666-4666-8666-666666666666') <> 'premium' THEN RAISE EXCEPTION 'verified state not applied'; END IF;
+END $$;
+SQL
+echo 'PASS: billing concurrency (20 parallel deliveries of one charge -> 1 cash row, newest snapshot applied)'
+
 # ===== Dump / restore: the populated schema restores and keeps its contract =====
 docker exec "$container" pg_dump -U postgres -Fc -d "$db" -f /tmp/fj.dump
 docker exec "$container" createdb -U postgres fj_restored

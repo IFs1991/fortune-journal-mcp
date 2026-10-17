@@ -110,11 +110,14 @@ DECLARE
   v_currency text := p_event->>'currency';
   v_exponent smallint := (p_event->>'currency_exponent')::smallint;
   v_snapshot jsonb := nullif(p_event->'subscription', 'null'::jsonb);
+  v_reconciled boolean := coalesce((p_event->>'reconciled')::boolean, false);
   v_snapshot_at timestamptz;
   v_is_cash boolean;
+  v_cash_duplicate boolean := false;
   v_disposition text := 'none';
   v_subscription public.subscriptions%ROWTYPE;
   v_previous public.billing_events%ROWTYPE;
+  v_new public.subscriptions%ROWTYPE;
 BEGIN
   IF p_provider IS NULL OR p_provider !~ '^[a-z][a-z0-9_]{1,30}$'
      OR p_event_id IS NULL OR char_length(p_event_id) NOT BETWEEN 1 AND 200
@@ -138,17 +141,28 @@ BEGIN
     RAISE EXCEPTION 'NON_FINANCIAL_AMOUNT';
   END IF;
 
-  -- Duplicate delivery (same event id) or another notification of the same money movement.
-  SELECT * INTO v_previous FROM public.billing_events
-  WHERE provider = p_provider AND (event_id = p_event_id OR economic_key = v_economic_key)
-  LIMIT 1;
+  -- Redelivery of the same event: it was fully processed the first time.
+  SELECT * INTO v_previous FROM public.billing_events WHERE provider = p_provider AND event_id = p_event_id;
   IF FOUND THEN
-    IF v_previous.event_type IS DISTINCT FROM v_kind OR v_previous.amount_minor IS DISTINCT FROM v_amount
-       OR v_previous.currency IS DISTINCT FROM v_currency OR v_previous.currency_exponent IS DISTINCT FROM v_exponent
+    IF v_previous.event_type IS DISTINCT FROM v_kind OR v_previous.economic_key IS DISTINCT FROM v_economic_key
+       OR v_previous.amount_minor IS DISTINCT FROM v_amount OR v_previous.currency IS DISTINCT FROM v_currency
+       OR v_previous.currency_exponent IS DISTINCT FROM v_exponent
        OR v_previous.provider_subscription_id IS DISTINCT FROM v_subscription.provider_subscription_id THEN
       RAISE EXCEPTION 'BILLING_IDEMPOTENCY_CONFLICT';
     END IF;
     RETURN jsonb_build_object('duplicate', true, 'stateApplied', false);
+  END IF;
+  -- Another notification of an already recorded money movement: same facts required, cash not counted again.
+  IF v_is_cash THEN
+    SELECT * INTO v_previous FROM public.billing_events WHERE provider = p_provider AND economic_key = v_economic_key;
+    IF FOUND THEN
+      IF v_previous.event_type IS DISTINCT FROM v_kind OR v_previous.amount_minor IS DISTINCT FROM v_amount
+         OR v_previous.currency IS DISTINCT FROM v_currency OR v_previous.currency_exponent IS DISTINCT FROM v_exponent
+         OR v_previous.provider_subscription_id IS DISTINCT FROM v_subscription.provider_subscription_id THEN
+        RAISE EXCEPTION 'BILLING_IDEMPOTENCY_CONFLICT';
+      END IF;
+      v_cash_duplicate := true;
+    END IF;
   END IF;
 
   IF v_snapshot IS NOT NULL THEN
@@ -157,30 +171,50 @@ BEGIN
        OR v_snapshot->>'status' NOT IN ('incomplete', 'trialing', 'active', 'past_due', 'canceled', 'unpaid', 'expired') THEN
       RAISE EXCEPTION 'INVALID_SUBSCRIPTION_SNAPSHOT';
     END IF;
-    IF v_subscription.provider_updated_at IS NULL OR v_snapshot_at > v_subscription.provider_updated_at THEN
+    v_new := v_subscription;
+    v_new.status := v_snapshot->>'status';
+    v_new.current_period_end := (v_snapshot->>'current_period_end')::timestamptz;
+    v_new.cancel_at_period_end := coalesce((v_snapshot->>'cancel_at_period_end')::boolean, false);
+    v_new.plan_key := v_snapshot->>'plan_key';
+    v_new.amount_minor := (v_snapshot->>'amount_minor')::bigint;
+    v_new.currency := v_snapshot->>'currency';
+    v_new.currency_exponent := (v_snapshot->>'currency_exponent')::smallint;
+    v_new.interval_months := (v_snapshot->>'interval_months')::smallint;
+
+    IF v_subscription.provider_updated_at IS NULL OR v_snapshot_at > v_subscription.provider_updated_at
+       OR (v_reconciled AND v_snapshot_at >= v_subscription.provider_updated_at) THEN
       UPDATE public.subscriptions SET
-        status = v_snapshot->>'status',
-        current_period_end = (v_snapshot->>'current_period_end')::timestamptz,
-        cancel_at_period_end = coalesce((v_snapshot->>'cancel_at_period_end')::boolean, false),
-        verified_at = now(),
-        provider_updated_at = v_snapshot_at,
-        plan_key = v_snapshot->>'plan_key',
-        amount_minor = (v_snapshot->>'amount_minor')::bigint,
-        currency = v_snapshot->>'currency',
-        currency_exponent = (v_snapshot->>'currency_exponent')::smallint,
-        interval_months = (v_snapshot->>'interval_months')::smallint,
-        updated_at = now()
+        status = v_new.status, current_period_end = v_new.current_period_end,
+        cancel_at_period_end = v_new.cancel_at_period_end, verified_at = now(), provider_updated_at = v_snapshot_at,
+        plan_key = v_new.plan_key, amount_minor = v_new.amount_minor, currency = v_new.currency,
+        currency_exponent = v_new.currency_exponent, interval_months = v_new.interval_months, updated_at = now()
       WHERE id = v_subscription.id;
       v_disposition := 'applied';
     ELSIF v_snapshot_at = v_subscription.provider_updated_at
-       AND (v_snapshot->>'status' IS DISTINCT FROM v_subscription.status
-         OR (v_snapshot->>'current_period_end')::timestamptz IS DISTINCT FROM v_subscription.current_period_end) THEN
+       AND (v_new.status, v_new.current_period_end, v_new.cancel_at_period_end, v_new.plan_key, v_new.amount_minor,
+            v_new.currency, v_new.currency_exponent, v_new.interval_months)
+           IS DISTINCT FROM
+           (v_subscription.status, v_subscription.current_period_end, v_subscription.cancel_at_period_end,
+            v_subscription.plan_key, v_subscription.amount_minor, v_subscription.currency,
+            v_subscription.currency_exponent, v_subscription.interval_months) THEN
+      -- The provider gave two different states for the same instant; which is newer is unknowable here.
       v_disposition := 'needs_reconciliation';
+      IF (v_new.status IN ('active', 'trialing') AND coalesce(v_new.current_period_end > now(), false))
+         IS DISTINCT FROM
+         (v_subscription.status IN ('active', 'trialing') AND coalesce(v_subscription.current_period_end > now(), false)) THEN
+        UPDATE public.subscriptions SET verified_at = NULL, updated_at = now() WHERE id = v_subscription.id;
+      END IF;
     ELSE
       v_disposition := 'older_or_identical';
     END IF;
+    IF v_subscription.user_id IS NULL AND v_new.status IN ('incomplete', 'trialing', 'active', 'past_due', 'unpaid') THEN
+      v_disposition := 'needs_reconciliation';
+    END IF;
   END IF;
 
+  IF v_cash_duplicate THEN
+    RETURN jsonb_build_object('duplicate', true, 'stateApplied', v_disposition = 'applied', 'stateDisposition', v_disposition);
+  END IF;
   INSERT INTO public.billing_events (
     provider, event_id, user_id, provider_subscription_id, event_type, occurred_at, economic_key, original_payment_key,
     amount_minor, currency, currency_exponent, billing_reason, plan_key, state_disposition
@@ -197,7 +231,7 @@ END $_$;
 -- Name: FUNCTION fj_apply_billing(p_provider text, p_event_id text, p_event jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fj_apply_billing(p_provider text, p_event_id text, p_event jsonb) IS 'Billing adapter (not connected): idempotent verified event + ordered subscription snapshot.';
+COMMENT ON FUNCTION public.fj_apply_billing(p_provider text, p_event_id text, p_event jsonb) IS 'Billing adapter (not connected): idempotent verified event, cash counted once, ordered/reconciled subscription snapshot.';
 
 
 --
@@ -368,6 +402,29 @@ END $$;
 --
 
 COMMENT ON FUNCTION public.fj_cohort_report(p_from timestamp with time zone, p_until timestamp with time zone, p_asof timestamp with time zone) IS 'Ops report: consented signup cohorts (activation, D7, paid 35d).';
+
+
+--
+-- Name: fj_deidentify_subscription(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fj_deidentify_subscription() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NEW.user_id IS NULL THEN
+    NEW.provider_customer_id := NULL;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: FUNCTION fj_deidentify_subscription(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fj_deidentify_subscription() IS 'Trigger: a subscription binding of a deleted account drops the provider customer id.';
 
 
 --
@@ -778,7 +835,9 @@ BEGIN
     GROUP BY currency, currency_exponent
   )
   SELECT jsonb_build_object('rows', coalesce(jsonb_agg(to_jsonb(sums)), '[]'::jsonb),
-    'measure', 'net_cash_collected_not_mrr_or_accounting_revenue')
+    'measure', 'net_cash_collected_not_mrr_or_accounting_revenue',
+    'eventsNeedingReconciliation', (SELECT count(*) FROM public.billing_events
+      WHERE state_disposition = 'needs_reconciliation' AND received_at >= p_from AND received_at < p_until))
   INTO v_output FROM sums;
   RETURN v_output;
 END $$;
@@ -788,7 +847,7 @@ END $$;
 -- Name: FUNCTION fj_revenue_report(p_from timestamp with time zone, p_until timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fj_revenue_report(p_from timestamp with time zone, p_until timestamp with time zone) IS 'Ops report: net cash collected per currency (not MRR).';
+COMMENT ON FUNCTION public.fj_revenue_report(p_from timestamp with time zone, p_until timestamp with time zone) IS 'Ops report: net cash collected per currency (not MRR) and billing events needing reconciliation.';
 
 
 --
@@ -1080,9 +1139,9 @@ CREATE VIEW public.fj_cash_events WITH (security_invoker='true') AS
 
 CREATE TABLE public.subscriptions (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    user_id uuid NOT NULL,
+    user_id uuid,
     provider text NOT NULL,
-    provider_customer_id text NOT NULL,
+    provider_customer_id text,
     provider_subscription_id text NOT NULL,
     status text NOT NULL,
     current_period_end timestamp with time zone,
@@ -1096,6 +1155,7 @@ CREATE TABLE public.subscriptions (
     interval_months smallint,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT deleted_account_is_deidentified CHECK (((user_id IS NOT NULL) OR (provider_customer_id IS NULL))),
     CONSTRAINT subscriptions_amount_minor_check CHECK ((amount_minor >= 0)),
     CONSTRAINT subscriptions_currency_check CHECK ((currency ~ '^[A-Z]{3}$'::text)),
     CONSTRAINT subscriptions_currency_exponent_check CHECK (((currency_exponent >= 0) AND (currency_exponent <= 6))),
@@ -1110,7 +1170,7 @@ CREATE TABLE public.subscriptions (
 -- Name: TABLE subscriptions; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.subscriptions IS 'Server-created binding to a provider subscription plus its latest verified state.';
+COMMENT ON TABLE public.subscriptions IS 'Server-created binding to a provider subscription plus its latest verified state. Kept de-identified after account deletion.';
 
 
 --
@@ -1628,6 +1688,13 @@ CREATE TRIGGER fj_post_edit BEFORE UPDATE ON public.fortune_posts FOR EACH ROW E
 
 
 --
+-- Name: subscriptions fj_subscription_deidentify; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER fj_subscription_deidentify BEFORE UPDATE OF user_id ON public.subscriptions FOR EACH ROW EXECUTE FUNCTION public.fj_deidentify_subscription();
+
+
+--
 -- Name: automation_runs automation_runs_post_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1696,7 +1763,7 @@ ALTER TABLE ONLY public.reading_feedback
 --
 
 ALTER TABLE ONLY public.subscriptions
-    ADD CONSTRAINT subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+    ADD CONSTRAINT subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
 
 
 --
@@ -1830,6 +1897,13 @@ GRANT ALL ON FUNCTION public.fj_claim_publish(p_post_id uuid, p_expected_hash te
 
 REVOKE ALL ON FUNCTION public.fj_cohort_report(p_from timestamp with time zone, p_until timestamp with time zone, p_asof timestamp with time zone) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fj_cohort_report(p_from timestamp with time zone, p_until timestamp with time zone, p_asof timestamp with time zone) TO service_role;
+
+
+--
+-- Name: FUNCTION fj_deidentify_subscription(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fj_deidentify_subscription() FROM PUBLIC;
 
 
 --
