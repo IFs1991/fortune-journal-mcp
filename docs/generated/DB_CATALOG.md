@@ -34,6 +34,7 @@ All are `SECURITY INVOKER` with `search_path = '` unless marked. `service_role` 
 | Function | Returns | Volatility | service_role | Note |
 |---|---|---|---|---|
 | `fj_access_status(p_user_id uuid)` | text | stable | yes | The only tier rule: suspended > verified current subscription > trial > free. |
+| `fj_access_token_hook(event jsonb)` | jsonb | immutable | yes | Supabase Auth hook: OAuth-client tokens get aud=urn:fortune-journal:mcp. |
 | `fj_apply_billing(p_provider text, p_event_id text, p_event jsonb)` | jsonb | volatile | yes | Billing adapter (not connected): idempotent verified event + ordered subscription snapshot. |
 | `fj_approve_post(p_id uuid, p_hash text)` | boolean | volatile | yes | Ops: approve a draft bound to its body hash. |
 | `fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid)` | jsonb | volatile | yes | Ops: acquire an idempotent run lease (publish is never retried). |
@@ -111,4 +112,4 @@ All are `SECURITY INVOKER` with `search_path = '` unless marked. `service_role` 
 
 ## Totals
 
-- Tables: 10, views: 3, functions: 18, triggers: 1, indexes: 30, policies: 0, foreign keys: 11, check constraints: 86
+- Tables: 10, views: 3, functions: 19, triggers: 1, indexes: 30, policies: 0, foreign keys: 11, check constraints: 86

@@ -10,6 +10,7 @@ import {writeFileSync} from 'node:fs';
 import {createClient} from '@supabase/supabase-js';
 import {createServerClient} from '@supabase/ssr';
 import {signOps} from '../src/domain/security.ts';
+import {MCP_TOKEN_AUDIENCE} from '../src/domain/oauth-claims.ts';
 
 const loopback = (u) => ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(u).hostname);
 const status = JSON.parse(
@@ -343,6 +344,12 @@ try {
     ok(
       claims.client_id === accessA.clientId && claims.sub === A.id && claims.iss === `${API}/auth/v1`,
       'access token not bound to client/user/issuer',
+    );
+    // Custom Access Token Hook: OAuth-client tokens are issued for this MCP resource only.
+    ok(claims.aud === MCP_TOKEN_AUDIENCE, `OAuth token aud=${JSON.stringify(claims.aud)}`);
+    ok(
+      JSON.stringify([decode(A.session.access_token).aud].flat()) === '["authenticated"]',
+      'browser session token got the MCP audience',
     );
   });
 
@@ -859,6 +866,7 @@ try {
       client_id: accessA.clientId,
     });
     ok(r.status === 200 && r.body.access_token, `refresh ${r.status}`);
+    ok(decode(r.body.access_token).aud === MCP_TOKEN_AUDIENCE, 'refreshed token lost the MCP audience');
     ok((await mcp(r.body.access_token, 'tools/list')).status === 200, 'refreshed token rejected');
     accessA = {...accessA, ...r.body};
   });

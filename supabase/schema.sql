@@ -70,6 +70,31 @@ COMMENT ON FUNCTION public.fj_access_status(p_user_id uuid) IS 'The only tier ru
 
 
 --
+-- Name: fj_access_token_hook(jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fj_access_token_hook(event jsonb) RETURNS jsonb
+    LANGUAGE plpgsql IMMUTABLE
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_claims jsonb := event->'claims';
+BEGIN
+  IF jsonb_typeof(v_claims->'client_id') = 'string' AND v_claims->>'client_id' <> '' THEN
+    v_claims := jsonb_set(v_claims, '{aud}', '"urn:fortune-journal:mcp"'::jsonb);
+  END IF;
+  RETURN jsonb_build_object('claims', v_claims);
+END $$;
+
+
+--
+-- Name: FUNCTION fj_access_token_hook(event jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fj_access_token_hook(event jsonb) IS 'Supabase Auth hook: OAuth-client tokens get aud=urn:fortune-journal:mcp.';
+
+
+--
 -- Name: fj_apply_billing(text, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1756,6 +1781,15 @@ ALTER TABLE public.user_readings ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON FUNCTION public.fj_access_status(p_user_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fj_access_status(p_user_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION fj_access_token_hook(event jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fj_access_token_hook(event jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fj_access_token_hook(event jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fj_access_token_hook(event jsonb) TO supabase_auth_admin;
 
 
 --

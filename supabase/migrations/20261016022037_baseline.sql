@@ -219,6 +219,27 @@ BEGIN
 END $$;
 
 -- =====================================================================================================
+-- 1b. Auth: audience of MCP access tokens (Supabase Custom Access Token Hook)
+-- =====================================================================================================
+
+-- Enable in Supabase Auth -> Hooks -> Customize Access Token (pg-functions://postgres/public/fj_access_token_hook).
+-- Supabase issues aud='authenticated' for every token and ignores the RFC 8707 `resource` parameter (the hook
+-- input has no resource either). Every token issued to an OAuth client carries client_id, so this replaces its
+-- aud with the MCP audience: /api/mcp requires exactly that audience and the account web APIs refuse it.
+-- Browser-session tokens are returned unchanged. Pure function of its input (no table access); if it fails,
+-- Supabase issues no token (fail closed). Keep the value equal to MCP_TOKEN_AUDIENCE in src/domain/oauth-claims.ts.
+CREATE FUNCTION public.fj_access_token_hook(event jsonb) RETURNS jsonb
+LANGUAGE plpgsql IMMUTABLE SECURITY INVOKER SET search_path = '' AS $$
+DECLARE
+  v_claims jsonb := event->'claims';
+BEGIN
+  IF jsonb_typeof(v_claims->'client_id') = 'string' AND v_claims->>'client_id' <> '' THEN
+    v_claims := jsonb_set(v_claims, '{aud}', '"urn:fortune-journal:mcp"'::jsonb);
+  END IF;
+  RETURN jsonb_build_object('claims', v_claims);
+END $$;
+
+-- =====================================================================================================
 -- 2. Optional analytics (global switch AND explicit consent)
 -- =====================================================================================================
 
@@ -1015,6 +1036,7 @@ COMMENT ON FUNCTION public.fj_cohort_report(timestamptz, timestamptz, timestampt
 COMMENT ON FUNCTION public.fj_follower_growth(text, timestamptz) IS 'Ops report: 7-day follower change from two fresh endpoint snapshots.';
 COMMENT ON FUNCTION public.fj_operation_report(timestamptz, timestamptz) IS 'Ops report: run outcomes and recorded costs with provenance.';
 COMMENT ON FUNCTION public.fj_purge_expired() IS 'Cron: 90/400-day retention and expired publish leases to unknown.';
+COMMENT ON FUNCTION public.fj_access_token_hook(jsonb) IS 'Supabase Auth hook: OAuth-client tokens get aud=urn:fortune-journal:mcp.';
 COMMENT ON FUNCTION public.fj_guard_post_edit() IS 'Trigger: published bodies are immutable; edits withdraw approval.';
 
 -- =====================================================================================================
@@ -1075,6 +1097,9 @@ GRANT EXECUTE ON FUNCTION
   public.fj_cohort_report(timestamptz, timestamptz, timestamptz),
   public.fj_follower_growth(text, timestamptz),
   public.fj_operation_report(timestamptz, timestamptz),
-  public.fj_purge_expired()
+  public.fj_purge_expired(),
+  public.fj_access_token_hook(jsonb)
 TO service_role;
+-- Supabase Auth runs the hook as supabase_auth_admin; it needs nothing else in this schema.
+GRANT EXECUTE ON FUNCTION public.fj_access_token_hook(jsonb) TO supabase_auth_admin;
 COMMIT;

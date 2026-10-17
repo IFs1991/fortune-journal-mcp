@@ -4,13 +4,14 @@ import {
   validateMcpAccessClaims,
   decodeJwtPayload,
   precheckMcpAccessClaims,
+  MCP_TOKEN_AUDIENCE,
 } from '../src/domain/oauth-claims.ts';
 const issuer = 'https://project.supabase.co/auth/v1',
   user = '106a4935-79ed-4e58-9804-841a85095caa',
   now = 1_800_000_000;
 const good = {
   iss: issuer,
-  aud: 'authenticated',
+  aud: MCP_TOKEN_AUDIENCE,
   sub: user,
   role: 'authenticated',
   client_id: 'client-123',
@@ -22,10 +23,26 @@ test('accepts a Supabase OAuth access token bound to the verified user and an OA
     expiresAt: now + 60,
   });
   assert.deepEqual(
-    validateMcpAccessClaims({...good, aud: ['authenticated', 'x']}, {issuer, userId: user, nowSeconds: now})
+    validateMcpAccessClaims({...good, aud: [MCP_TOKEN_AUDIENCE]}, {issuer, userId: user, nowSeconds: now})
       ?.clientId,
     'client-123',
   );
+});
+test('rejects tokens not issued for this MCP resource (RFC 8707 audience), even with a client_id', () => {
+  const opts = {issuer, userId: user, nowSeconds: now};
+  for (const aud of [
+    'authenticated',
+    ['authenticated'],
+    ['authenticated', MCP_TOKEN_AUDIENCE],
+    [MCP_TOKEN_AUDIENCE, 'https://other.example/api'],
+    'https://other.example/api/mcp',
+    [],
+    undefined,
+    MCP_TOKEN_AUDIENCE.toUpperCase(),
+  ]) {
+    assert.equal(validateMcpAccessClaims({...good, aud}, opts), null, JSON.stringify(aud));
+    assert.equal(precheckMcpAccessClaims({...good, aud}, opts), false, JSON.stringify(aud));
+  }
 });
 test('rejects browser-session tokens without client_id, foreign issuers, wrong subject, role, audience, expiry', () => {
   const opts = {issuer, userId: user, nowSeconds: now};
@@ -62,7 +79,7 @@ test('JWT payload decoding is strict about shape', () => {
 test('pre-check rejects expired, foreign-issuer and non-OAuth tokens before any network call, and never accepts on its own', () => {
   const opts = {issuer, nowSeconds: now};
   assert.equal(precheckMcpAccessClaims(good, opts), true);
-  assert.equal(precheckMcpAccessClaims({...good, aud: ['authenticated', 'x']}, opts), true);
+  assert.equal(precheckMcpAccessClaims({...good, aud: [MCP_TOKEN_AUDIENCE]}, opts), true);
   for (const bad of [
     {...good, exp: now},
     {...good, exp: now - 1},

@@ -1,6 +1,14 @@
 /** Pure claim checks for MCP bearer tokens. Signature/liveness is verified separately by Supabase Auth (getUser). */
 export type McpClaimCheck = {issuer: string; userId: string; nowSeconds: number};
 
+/**
+ * Audience of every access token this project issues to an OAuth client. Supabase Auth always issues
+ * aud='authenticated' and ignores the RFC 8707 `resource` parameter, so the Custom Access Token Hook
+ * (public.fj_access_token_hook in the baseline migration) replaces aud with this value whenever the token carries
+ * a client_id. Browser-session tokens keep aud='authenticated'. Keep both copies identical.
+ */
+export const MCP_TOKEN_AUDIENCE = 'urn:fortune-journal:mcp';
+
 export function decodeJwtPayload(token: string): Record<string, unknown> | null {
   const parts = token.split('.');
   if (parts.length !== 3 || !parts[1]) return null;
@@ -14,10 +22,24 @@ export function decodeJwtPayload(token: string): Record<string, unknown> | null 
   }
 }
 
+const audiences = (payload: Record<string, unknown>): unknown[] => [payload.aud].flat();
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function commonClaims(payload: Record<string, unknown>, issuer: string, nowSeconds: number): boolean {
+  return (
+    payload.iss === issuer.replace(/\/+$/, '') &&
+    payload.role === 'authenticated' &&
+    typeof payload.sub === 'string' &&
+    UUID.test(payload.sub) &&
+    typeof payload.exp === 'number' &&
+    Number.isFinite(payload.exp) &&
+    payload.exp > nowSeconds
+  );
+}
+
 /**
- * Supabase OAuth 2.1 access tokens carry client_id; browser-session tokens do not.
- * Supabase currently issues aud='authenticated' (no RFC 8707 resource-specific aud), so the
- * project must be dedicated to this app. Returns null for anything not bound to this user+issuer.
+ * Supabase OAuth 2.1 access tokens carry client_id and, through the hook, aud=MCP_TOKEN_AUDIENCE only.
+ * Returns null for anything not bound to this user, issuer and audience.
  */
 export function validateMcpAccessClaims(
   payload: Record<string, unknown>,
@@ -29,18 +51,16 @@ export function validateMcpAccessClaims(
 
 /**
  * Same claim rules minus the user binding, on the UNVERIFIED payload. Used only to reject (expired, foreign
- * issuer, browser-session token) without a Supabase Auth round trip; passing it never authenticates anything.
+ * issuer, wrong audience, browser-session token) without a Supabase Auth round trip; passing it never
+ * authenticates anything.
  */
 export function precheckMcpAccessClaims(
   payload: Record<string, unknown>,
   check: Omit<McpClaimCheck, 'userId'>,
 ): boolean {
-  const issuer = check.issuer.replace(/\/+$/, '');
-  const aud = payload.aud;
-  const goodAudience = aud === 'authenticated' || (Array.isArray(aud) && aud.includes('authenticated'));
-  if (payload.iss !== issuer || !goodAudience || payload.role !== 'authenticated') return false;
-  if (typeof payload.sub !== 'string' || !/^[0-9a-f-]{36}$/i.test(payload.sub)) return false;
-  if (typeof payload.client_id !== 'string' || !payload.client_id || payload.client_id.length > 256)
-    return false;
-  return typeof payload.exp === 'number' && Number.isFinite(payload.exp) && payload.exp > check.nowSeconds;
+  // Exactly our audience: a token that is also valid for another audience is not a token for this resource.
+  const aud = audiences(payload);
+  if (aud.length !== 1 || aud[0] !== MCP_TOKEN_AUDIENCE) return false;
+  if (!commonClaims(payload, check.issuer, check.nowSeconds)) return false;
+  return typeof payload.client_id === 'string' && !!payload.client_id && payload.client_id.length <= 256;
 }
