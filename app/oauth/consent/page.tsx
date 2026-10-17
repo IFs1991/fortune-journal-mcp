@@ -1,6 +1,6 @@
 import {redirect} from 'next/navigation';
-import {serverSupabase} from '@/src/lib/supabase/server';
 import {clientPlatform} from '@/src/lib/env';
+import {webSession} from '@/src/lib/web-session';
 
 export default async function OAuthConsent({
   searchParams,
@@ -8,16 +8,14 @@ export default async function OAuthConsent({
   searchParams: Promise<{authorization_id?: string}>;
 }) {
   const authorizationId = (await searchParams).authorization_id;
-  if (!authorizationId || authorizationId.length > 256) return <main>Invalid authorization request.</main>;
-  const supabase = await serverSupabase();
-  const {
-    data: {user},
-  } = await supabase.auth.getUser();
-  if (!user)
+  if (!authorizationId || !/^[A-Za-z0-9_-]{5,256}$/.test(authorizationId))
+    return <main>Invalid authorization request.</main>;
+  const session = await webSession();
+  if (!session)
     redirect(
       `/login?next=${encodeURIComponent(`/oauth/consent?authorization_id=${encodeURIComponent(authorizationId)}`)}`,
     );
-  const {data: details, error} = await supabase.auth.oauth.getAuthorizationDetails(authorizationId);
+  const {data: details, error} = await session.supabase.auth.oauth.getAuthorizationDetails(authorizationId);
   if (error || !details) return <main>Connection request expired or invalid.</main>;
   if (!('authorization_id' in details)) redirect(details.redirect_url);
   // Dynamically registered clients choose their own name; only operator-listed client IDs are shown as verified.

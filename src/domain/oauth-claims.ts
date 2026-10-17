@@ -64,3 +64,20 @@ export function precheckMcpAccessClaims(
   if (!commonClaims(payload, check.issuer, check.nowSeconds)) return false;
   return typeof payload.client_id === 'string' && !!payload.client_id && payload.client_id.length <= 256;
 }
+
+/**
+ * Browser-session tokens for the account web pages and APIs: issued by Supabase Auth to the user's own browser
+ * (no client_id, aud='authenticated' only), bound to a live session id. Any OAuth-client token is refused here,
+ * whatever else it claims. Run on the payload of the exact token Supabase Auth just verified.
+ */
+export function validateWebSessionClaims(
+  payload: Record<string, unknown>,
+  check: McpClaimCheck,
+): {sessionId: string} | null {
+  const aud = audiences(payload);
+  if (aud.length !== 1 || aud[0] !== 'authenticated') return null;
+  if (!commonClaims(payload, check.issuer, check.nowSeconds) || payload.sub !== check.userId) return null;
+  if ('client_id' in payload || payload.is_anonymous === true) return null;
+  if (typeof payload.session_id !== 'string' || !UUID.test(payload.session_id)) return null;
+  return {sessionId: payload.session_id};
+}

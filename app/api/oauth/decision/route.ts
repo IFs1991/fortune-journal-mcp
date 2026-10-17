@@ -1,11 +1,17 @@
 import {NextResponse} from 'next/server';
+import {readBoundedText} from '@/src/domain/security';
 import {appOrigin} from '@/src/lib/env';
 import {sameOriginPost} from '@/src/lib/urls';
-import {serverSupabase} from '@/src/lib/supabase/server';
+import {webSession} from '@/src/lib/web-session';
 
 export async function POST(req: Request) {
   if (!sameOriginPost(req, appOrigin())) return new Response('Forbidden', {status: 403});
-  const form = await req.formData();
+  let form: URLSearchParams;
+  try {
+    form = new URLSearchParams(await readBoundedText(req, 4096));
+  } catch {
+    return new Response('Too large', {status: 413});
+  }
   const authorizationId = form.get('authorization_id');
   const decision = form.get('decision');
   if (
@@ -14,11 +20,9 @@ export async function POST(req: Request) {
     (decision !== 'approve' && decision !== 'deny')
   )
     return new Response('Bad request', {status: 400});
-  const supabase = await serverSupabase();
-  const {
-    data: {user},
-  } = await supabase.auth.getUser();
-  if (!user) return new Response('Sign in required', {status: 401});
+  const session = await webSession();
+  if (!session) return new Response('Sign in required', {status: 401});
+  const {supabase} = session;
   // Supabase binds authorizationId to the requesting OAuth client and user.
   const {data: details, error: detailError} =
     await supabase.auth.oauth.getAuthorizationDetails(authorizationId);
