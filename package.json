@@ -23,6 +23,7 @@
     "test:db": "bash scripts/test-db.sh",
     "test:db:supabase": "bash scripts/test-supabase-local.sh",
     "test:e2e:local": "node --experimental-strip-types scripts/e2e-local.mjs --out verification/e2e_local.json",
+    "test:ops:local": "node --experimental-strip-types --import ./tests/support/register.mjs scripts/test-ops-local.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

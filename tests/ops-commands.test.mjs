@@ -52,3 +52,17 @@ test('only allowlisted error codes reach the operator', () => {
   );
   assert.equal(publicErrorCode('THREADS_RATE_LIMITED'), 'OPERATION_FAILED');
 });
+
+test('resolve_publish needs an external id exactly when the post was found live', () => {
+  const base = {requestId, action: 'resolve_publish', postId: requestId};
+  assert.equal(opsCommand.safeParse({...base, outcome: 'not_published'}).success, true);
+  assert.equal(opsCommand.safeParse({...base, outcome: 'published', externalPostId: '1789'}).success, true);
+  assert.equal(opsCommand.safeParse({...base, outcome: 'published'}).success, false);
+  assert.equal(
+    opsCommand.safeParse({...base, outcome: 'not_published', externalPostId: '1789'}).success,
+    false,
+  );
+  assert.equal(opsCommand.safeParse({...base, outcome: 'published', externalPostId: '../x'}).success, false);
+  assert.equal(opsCommand.safeParse({...base, outcome: 'retry'}).success, false);
+  assert.equal(publicErrorCode(new Error('POST_NOT_UNKNOWN')), 'POST_NOT_UNKNOWN');
+});

@@ -786,7 +786,8 @@ CREATE INDEX account_metric_snapshots_series ON public.account_metric_snapshots 
 COMMENT ON TABLE public.account_metric_snapshots IS 'One metric and interval per row; never sum follower stocks or overlapping ranges.';
 
 -- Acquire (or re-acquire) the lease for one idempotent task. Publishing is never retried automatically:
--- an expired publish lease becomes 'unknown'. Other tasks get up to 3 attempts. A refusal reports
+-- an expired publish lease becomes 'unknown', and only a run recorded as definitely not published ('failed')
+-- can be claimed again, by an explicit operator command. Other tasks get up to 3 attempts. A refusal reports
 -- `exhausted` when no further attempt will ever be granted for this key (callers must treat it as a failure).
 CREATE FUNCTION public.fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid DEFAULT NULL) RETURNS jsonb
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
@@ -811,8 +812,8 @@ BEGIN
     UPDATE public.fortune_posts SET status = 'publish_unknown' WHERE id = p_post_id AND status = 'publishing';
     RETURN jsonb_build_object('acquired', false, 'runId', v_run.id, 'status', 'unknown');
   END IF;
-  IF p_task <> 'publish_post' AND v_run.attempts < 3
-     AND (v_run.status = 'failed' OR (v_run.status = 'running' AND v_run.lease_expires_at <= now())) THEN
+  IF v_run.attempts < 3 AND (v_run.status = 'failed'
+       OR (p_task <> 'publish_post' AND v_run.status = 'running' AND v_run.lease_expires_at <= now())) THEN
     UPDATE public.automation_runs SET status = 'running', attempts = attempts + 1, started_at = now(), finished_at = NULL,
       lease_expires_at = now() + interval '2 minutes', error_code = NULL
     WHERE id = v_run.id
@@ -872,38 +873,74 @@ BEGIN
   RETURN v_run;
 END $$;
 
--- p_external_id NULL = the remote outcome is unknown (timeout, lost response, failed local write).
+-- Outcome of one publish attempt. p_external_id set = published. p_external_id NULL = unknown (timeout, lost
+-- response, failed local write), unless p_not_published: the failure happened before the publish call (container
+-- creation), so nothing can be live; the post returns to 'approved' and the run is 'failed' (re-claimable once
+-- the operator asks again). Unknown is terminal for automation; fj_resolve_publish is the human exit.
 CREATE FUNCTION public.fj_finish_publish(
   p_post_id uuid,
   p_run_id uuid,
   p_external_id text,
   p_container_id text,
-  p_error text DEFAULT NULL
+  p_error text DEFAULT NULL,
+  p_not_published boolean DEFAULT false
 ) RETURNS boolean
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
 DECLARE
   v_run public.automation_runs%ROWTYPE;
+  v_not_published boolean := coalesce(p_not_published, false) AND p_external_id IS NULL;
 BEGIN
   PERFORM 1 FROM public.fortune_posts WHERE id = p_post_id FOR UPDATE;
   SELECT * INTO v_run FROM public.automation_runs
   WHERE id = p_run_id AND post_id = p_post_id AND task = 'publish_post'
   FOR UPDATE;
-  IF NOT FOUND OR v_run.status NOT IN ('running', 'unknown') THEN
+  -- A definite "not published" may only end the attempt still in flight; an unknown run stays unknown.
+  IF NOT FOUND OR v_run.status NOT IN ('running', 'unknown') OR (v_not_published AND v_run.status <> 'running') THEN
     RETURN false;
   END IF;
   UPDATE public.fortune_posts SET
-    status = CASE WHEN p_external_id IS NULL THEN 'publish_unknown' ELSE 'published' END,
+    status = CASE WHEN p_external_id IS NOT NULL THEN 'published' WHEN v_not_published THEN 'approved' ELSE 'publish_unknown' END,
     external_post_id = p_external_id,
     container_id = coalesce(p_container_id, container_id),
     published_at = CASE WHEN p_external_id IS NULL THEN NULL ELSE now() END
   WHERE id = p_post_id;
   UPDATE public.automation_runs SET
-    status = CASE WHEN p_external_id IS NULL THEN 'unknown' ELSE 'succeeded' END,
+    status = CASE WHEN p_external_id IS NOT NULL THEN 'succeeded' WHEN v_not_published THEN 'failed' ELSE 'unknown' END,
     finished_at = now(),
     duration_ms = greatest(0, extract(epoch FROM (now() - started_at)) * 1000)::bigint,
     error_code = p_error
   WHERE id = p_run_id;
   RETURN true;
+END $$;
+
+-- Human reconciliation of a publish_unknown post after checking the Threads profile. With an external id: it is
+-- live (recorded as published now; the true publish time is not known). Without: a person confirmed it is not
+-- live, so the post returns to 'approved' and the run to 'failed' (the next publish_post claims a new attempt).
+CREATE FUNCTION public.fj_resolve_publish(p_post_id uuid, p_external_id text DEFAULT NULL) RETURNS jsonb
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
+DECLARE
+  v_post public.fortune_posts%ROWTYPE;
+BEGIN
+  IF p_post_id IS NULL OR (p_external_id IS NOT NULL AND p_external_id !~ '^[0-9]{1,80}$') THEN
+    RAISE EXCEPTION 'INVALID_RESOLUTION';
+  END IF;
+  SELECT * INTO v_post FROM public.fortune_posts WHERE id = p_post_id FOR UPDATE;
+  IF NOT FOUND OR v_post.status <> 'publish_unknown' THEN
+    RAISE EXCEPTION 'POST_NOT_UNKNOWN';
+  END IF;
+  PERFORM 1 FROM public.automation_runs WHERE post_id = p_post_id AND task = 'publish_post' FOR UPDATE;
+  IF p_external_id IS NOT NULL THEN
+    UPDATE public.fortune_posts SET status = 'published', external_post_id = p_external_id, published_at = now()
+    WHERE id = p_post_id;
+  ELSE
+    UPDATE public.fortune_posts SET status = 'approved' WHERE id = p_post_id;
+  END IF;
+  UPDATE public.automation_runs SET
+    status = CASE WHEN p_external_id IS NOT NULL THEN 'succeeded' ELSE 'failed' END,
+    finished_at = coalesce(finished_at, now()),
+    error_code = CASE WHEN p_external_id IS NOT NULL THEN 'RESOLVED_PUBLISHED' ELSE 'RESOLVED_NOT_PUBLISHED' END
+  WHERE post_id = p_post_id AND task = 'publish_post' AND status IN ('unknown', 'running');
+  RETURN jsonb_build_object('resolved', true, 'status', CASE WHEN p_external_id IS NOT NULL THEN 'published' ELSE 'approved' END);
 END $$;
 
 -- =====================================================================================================
@@ -1039,6 +1076,9 @@ BEGIN
   )
   SELECT coalesce(jsonb_agg(to_jsonb(c)), '[]'::jsonb) INTO v_costs FROM c;
   RETURN jsonb_build_object('tasks', v_tasks, 'costByCurrencyAndSource', v_costs,
+    -- Outstanding human work regardless of the window: never re-posted automatically (fj_resolve_publish).
+    'publishUnknown', (SELECT coalesce(jsonb_agg(jsonb_build_object('postId', id, 'since', updated_at) ORDER BY updated_at), '[]'::jsonb)
+      FROM (SELECT id, updated_at FROM public.fortune_posts WHERE status = 'publish_unknown' ORDER BY updated_at LIMIT 50) u),
     'caveat', 'Missing cost is unobserved, not zero. Customer-host LLM costs are not observable.');
 END $$;
 
@@ -1090,14 +1130,15 @@ COMMENT ON FUNCTION public.fj_record_funnel(uuid, text, text, text, text, uuid) 
 COMMENT ON FUNCTION public.fj_submit_feedback(uuid, uuid, smallint, text, date) IS 'MCP: consented fixed-label feedback on an own reading.';
 COMMENT ON FUNCTION public.fj_apply_billing(text, text, jsonb) IS 'Billing adapter (not connected): idempotent verified event, cash counted once, ordered/reconciled subscription snapshot.';
 COMMENT ON FUNCTION public.fj_revenue_report(timestamptz, timestamptz) IS 'Ops report: net cash collected per currency (not MRR) and billing events needing reconciliation.';
-COMMENT ON FUNCTION public.fj_begin_run(text, text, text, uuid) IS 'Ops: acquire an idempotent run lease (publish is never retried; exhausted keys reported).';
+COMMENT ON FUNCTION public.fj_begin_run(text, text, text, uuid) IS 'Ops: acquire an idempotent run lease (publish never retried automatically; exhausted keys reported).';
 COMMENT ON FUNCTION public.fj_finish_run(uuid, integer, boolean, text) IS 'Ops: finish the current attempt of a non-publish run.';
 COMMENT ON FUNCTION public.fj_approve_post(uuid, text) IS 'Ops: approve a draft bound to its body hash.';
 COMMENT ON FUNCTION public.fj_claim_publish(uuid, text) IS 'Ops: claim an approved, due post for publishing (one claim only).';
-COMMENT ON FUNCTION public.fj_finish_publish(uuid, uuid, text, text, text) IS 'Ops: record published or unknown outcome.';
+COMMENT ON FUNCTION public.fj_finish_publish(uuid, uuid, text, text, text, boolean) IS 'Ops: record published, unknown or definitely-not-published outcome.';
+COMMENT ON FUNCTION public.fj_resolve_publish(uuid, text) IS 'Ops: human reconciliation of a publish_unknown post (published with id, or not published).';
 COMMENT ON FUNCTION public.fj_cohort_report(timestamptz, timestamptz, timestamptz) IS 'Ops report: consented signup cohorts (activation, D7, paid 35d).';
 COMMENT ON FUNCTION public.fj_follower_growth(text, timestamptz) IS 'Ops report: 7-day follower change from two fresh endpoint snapshots.';
-COMMENT ON FUNCTION public.fj_operation_report(timestamptz, timestamptz) IS 'Ops report: run outcomes and recorded costs with provenance.';
+COMMENT ON FUNCTION public.fj_operation_report(timestamptz, timestamptz) IS 'Ops report: run outcomes, recorded costs with provenance, outstanding unknown publishes.';
 COMMENT ON FUNCTION public.fj_purge_expired() IS 'Cron: 90/400-day retention and expired publish leases to unknown.';
 COMMENT ON FUNCTION public.fj_access_token_hook(jsonb) IS 'Supabase Auth hook: OAuth-client tokens get aud=urn:fortune-journal:mcp.';
 COMMENT ON FUNCTION public.fj_deidentify_subscription() IS 'Trigger: a subscription binding of a deleted account drops the provider customer id.';
@@ -1157,7 +1198,8 @@ GRANT EXECUTE ON FUNCTION
   public.fj_finish_run(uuid, integer, boolean, text),
   public.fj_approve_post(uuid, text),
   public.fj_claim_publish(uuid, text),
-  public.fj_finish_publish(uuid, uuid, text, text, text),
+  public.fj_finish_publish(uuid, uuid, text, text, text, boolean),
+  public.fj_resolve_publish(uuid, text),
   public.fj_cohort_report(timestamptz, timestamptz, timestamptz),
   public.fj_follower_growth(text, timestamptz),
   public.fj_operation_report(timestamptz, timestamptz),

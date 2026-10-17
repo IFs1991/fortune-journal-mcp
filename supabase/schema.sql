@@ -285,8 +285,8 @@ BEGIN
     UPDATE public.fortune_posts SET status = 'publish_unknown' WHERE id = p_post_id AND status = 'publishing';
     RETURN jsonb_build_object('acquired', false, 'runId', v_run.id, 'status', 'unknown');
   END IF;
-  IF p_task <> 'publish_post' AND v_run.attempts < 3
-     AND (v_run.status = 'failed' OR (v_run.status = 'running' AND v_run.lease_expires_at <= now())) THEN
+  IF v_run.attempts < 3 AND (v_run.status = 'failed'
+       OR (p_task <> 'publish_post' AND v_run.status = 'running' AND v_run.lease_expires_at <= now())) THEN
     UPDATE public.automation_runs SET status = 'running', attempts = attempts + 1, started_at = now(), finished_at = NULL,
       lease_expires_at = now() + interval '2 minutes', error_code = NULL
     WHERE id = v_run.id
@@ -304,7 +304,7 @@ END $$;
 -- Name: FUNCTION fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid) IS 'Ops: acquire an idempotent run lease (publish is never retried; exhausted keys reported).';
+COMMENT ON FUNCTION public.fj_begin_run(p_task text, p_key text, p_actor text, p_post_id uuid) IS 'Ops: acquire an idempotent run lease (publish never retried automatically; exhausted keys reported).';
 
 
 --
@@ -431,31 +431,33 @@ COMMENT ON FUNCTION public.fj_deidentify_subscription() IS 'Trigger: a subscript
 
 
 --
--- Name: fj_finish_publish(uuid, uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+-- Name: fj_finish_publish(uuid, uuid, text, text, text, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text DEFAULT NULL::text) RETURNS boolean
+CREATE FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text DEFAULT NULL::text, p_not_published boolean DEFAULT false) RETURNS boolean
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
 DECLARE
   v_run public.automation_runs%ROWTYPE;
+  v_not_published boolean := coalesce(p_not_published, false) AND p_external_id IS NULL;
 BEGIN
   PERFORM 1 FROM public.fortune_posts WHERE id = p_post_id FOR UPDATE;
   SELECT * INTO v_run FROM public.automation_runs
   WHERE id = p_run_id AND post_id = p_post_id AND task = 'publish_post'
   FOR UPDATE;
-  IF NOT FOUND OR v_run.status NOT IN ('running', 'unknown') THEN
+  -- A definite "not published" may only end the attempt still in flight; an unknown run stays unknown.
+  IF NOT FOUND OR v_run.status NOT IN ('running', 'unknown') OR (v_not_published AND v_run.status <> 'running') THEN
     RETURN false;
   END IF;
   UPDATE public.fortune_posts SET
-    status = CASE WHEN p_external_id IS NULL THEN 'publish_unknown' ELSE 'published' END,
+    status = CASE WHEN p_external_id IS NOT NULL THEN 'published' WHEN v_not_published THEN 'approved' ELSE 'publish_unknown' END,
     external_post_id = p_external_id,
     container_id = coalesce(p_container_id, container_id),
     published_at = CASE WHEN p_external_id IS NULL THEN NULL ELSE now() END
   WHERE id = p_post_id;
   UPDATE public.automation_runs SET
-    status = CASE WHEN p_external_id IS NULL THEN 'unknown' ELSE 'succeeded' END,
+    status = CASE WHEN p_external_id IS NOT NULL THEN 'succeeded' WHEN v_not_published THEN 'failed' ELSE 'unknown' END,
     finished_at = now(),
     duration_ms = greatest(0, extract(epoch FROM (now() - started_at)) * 1000)::bigint,
     error_code = p_error
@@ -465,10 +467,10 @@ END $$;
 
 
 --
--- Name: FUNCTION fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text); Type: COMMENT; Schema: public; Owner: -
+-- Name: FUNCTION fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text, p_not_published boolean); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text) IS 'Ops: record published or unknown outcome.';
+COMMENT ON FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text, p_not_published boolean) IS 'Ops: record published, unknown or definitely-not-published outcome.';
 
 
 --
@@ -607,6 +609,9 @@ BEGIN
   )
   SELECT coalesce(jsonb_agg(to_jsonb(c)), '[]'::jsonb) INTO v_costs FROM c;
   RETURN jsonb_build_object('tasks', v_tasks, 'costByCurrencyAndSource', v_costs,
+    -- Outstanding human work regardless of the window: never re-posted automatically (fj_resolve_publish).
+    'publishUnknown', (SELECT coalesce(jsonb_agg(jsonb_build_object('postId', id, 'since', updated_at) ORDER BY updated_at), '[]'::jsonb)
+      FROM (SELECT id, updated_at FROM public.fortune_posts WHERE status = 'publish_unknown' ORDER BY updated_at LIMIT 50) u),
     'caveat', 'Missing cost is unobserved, not zero. Customer-host LLM costs are not observable.');
 END $$;
 
@@ -615,7 +620,7 @@ END $$;
 -- Name: FUNCTION fj_operation_report(p_from timestamp with time zone, p_until timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fj_operation_report(p_from timestamp with time zone, p_until timestamp with time zone) IS 'Ops report: run outcomes and recorded costs with provenance.';
+COMMENT ON FUNCTION public.fj_operation_report(p_from timestamp with time zone, p_until timestamp with time zone) IS 'Ops report: run outcomes, recorded costs with provenance, outstanding unknown publishes.';
 
 
 --
@@ -811,6 +816,47 @@ END $$;
 --
 
 COMMENT ON FUNCTION public.fj_record_funnel(p_user_id uuid, p_event text, p_dedupe_key text, p_channel text, p_evidence text, p_reading_id uuid) IS 'MCP: consented connection telemetry and explicit self-reports.';
+
+
+--
+-- Name: fj_resolve_publish(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fj_resolve_publish(p_post_id uuid, p_external_id text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $_$
+DECLARE
+  v_post public.fortune_posts%ROWTYPE;
+BEGIN
+  IF p_post_id IS NULL OR (p_external_id IS NOT NULL AND p_external_id !~ '^[0-9]{1,80}$') THEN
+    RAISE EXCEPTION 'INVALID_RESOLUTION';
+  END IF;
+  SELECT * INTO v_post FROM public.fortune_posts WHERE id = p_post_id FOR UPDATE;
+  IF NOT FOUND OR v_post.status <> 'publish_unknown' THEN
+    RAISE EXCEPTION 'POST_NOT_UNKNOWN';
+  END IF;
+  PERFORM 1 FROM public.automation_runs WHERE post_id = p_post_id AND task = 'publish_post' FOR UPDATE;
+  IF p_external_id IS NOT NULL THEN
+    UPDATE public.fortune_posts SET status = 'published', external_post_id = p_external_id, published_at = now()
+    WHERE id = p_post_id;
+  ELSE
+    UPDATE public.fortune_posts SET status = 'approved' WHERE id = p_post_id;
+  END IF;
+  UPDATE public.automation_runs SET
+    status = CASE WHEN p_external_id IS NOT NULL THEN 'succeeded' ELSE 'failed' END,
+    finished_at = coalesce(finished_at, now()),
+    error_code = CASE WHEN p_external_id IS NOT NULL THEN 'RESOLVED_PUBLISHED' ELSE 'RESOLVED_NOT_PUBLISHED' END
+  WHERE post_id = p_post_id AND task = 'publish_post' AND status IN ('unknown', 'running');
+  RETURN jsonb_build_object('resolved', true, 'status', CASE WHEN p_external_id IS NOT NULL THEN 'published' ELSE 'approved' END);
+END $_$;
+
+
+--
+-- Name: FUNCTION fj_resolve_publish(p_post_id uuid, p_external_id text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fj_resolve_publish(p_post_id uuid, p_external_id text) IS 'Ops: human reconciliation of a publish_unknown post (published with id, or not published).';
 
 
 --
@@ -1910,11 +1956,11 @@ REVOKE ALL ON FUNCTION public.fj_deidentify_subscription() FROM PUBLIC;
 
 
 --
--- Name: FUNCTION fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text, p_not_published boolean); Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text) TO service_role;
+REVOKE ALL ON FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text, p_not_published boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fj_finish_publish(p_post_id uuid, p_run_id uuid, p_external_id text, p_container_id text, p_error text, p_not_published boolean) TO service_role;
 
 
 --
@@ -1970,6 +2016,14 @@ GRANT ALL ON FUNCTION public.fj_record_calculation(p_user_id uuid, p_request_id 
 
 REVOKE ALL ON FUNCTION public.fj_record_funnel(p_user_id uuid, p_event text, p_dedupe_key text, p_channel text, p_evidence text, p_reading_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fj_record_funnel(p_user_id uuid, p_event text, p_dedupe_key text, p_channel text, p_evidence text, p_reading_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION fj_resolve_publish(p_post_id uuid, p_external_id text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fj_resolve_publish(p_post_id uuid, p_external_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fj_resolve_publish(p_post_id uuid, p_external_id text) TO service_role;
 
 
 --
