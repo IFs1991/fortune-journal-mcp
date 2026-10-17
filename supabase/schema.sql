@@ -74,7 +74,7 @@ COMMENT ON FUNCTION public.fj_access_status(p_user_id uuid) IS 'The only tier ru
 --
 
 CREATE FUNCTION public.fj_access_token_hook(event jsonb) RETURNS jsonb
-    LANGUAGE plpgsql IMMUTABLE
+    LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $$
 DECLARE

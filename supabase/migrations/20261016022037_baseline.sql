@@ -244,7 +244,7 @@ END $$;
 -- Browser-session tokens are returned unchanged. Pure function of its input (no table access); if it fails,
 -- Supabase issues no token (fail closed). Keep the value equal to MCP_TOKEN_AUDIENCE in src/domain/oauth-claims.ts.
 CREATE FUNCTION public.fj_access_token_hook(event jsonb) RETURNS jsonb
-LANGUAGE plpgsql IMMUTABLE SECURITY INVOKER SET search_path = '' AS $$
+LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path = '' AS $$
 DECLARE
   v_claims jsonb := event->'claims';
 BEGIN
